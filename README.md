@@ -8,7 +8,8 @@
 3. git clone https://github.com/ROBOTIS-GIT/DynamixelSDK
 4. git clone https://github.com/ROBOTIS-GIT/dynamixel-workbench-msgs.git
 5. cd ~/catkin_ws && catkin_make
-## to run ur5
+
+## To run ur5
 1. Connect to UR5 arm using ur_modern_driver package
 
 roslaunch ur_modern_driver ur5_bringup.launch robot_ip:=192.168.1.102 [reverse_port:=REVERSE_PORT]
@@ -24,3 +25,6 @@ roslaunch ur5_moveit_config moveit_rviz.launch config:=true
 4. Launch the ur5_controller
 
 roslaunch mbzirc_usrg_challenge2 move_group_interface_tutorial.launch
+
+## To run brick pose estimation
+`roslaunch mbzirc_brick_pose estimate_pose_2d.launch`
