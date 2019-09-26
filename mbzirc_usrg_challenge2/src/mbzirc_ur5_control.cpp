@@ -52,17 +52,20 @@
 
 //#define DEBUG
 #define DELAY 1.0         // for sleep function => robot updating states => 0.4 s fail (?)
-
 #define END_EFFECTOR 0.07
-
 #define PLANNING_TIMEOUT 20
+#define Z_OFFSET 0.04
 
 namespace rvt = rviz_visual_tools;
 
 // for rotation of objects
 tf2::Quaternion q;
 
-// for execute Planning
+// FLAG for robot motion
+bool atDefaultPose = false;
+bool finishPicking = false;
+bool finishStoring = false;
+bool FLAG_MOVE = false;
 
 
 // =============================== call back function ==================================== //
@@ -116,8 +119,11 @@ public:
     moveToDefault();
   }
 
-  void pickAtCallback(const geometry_msgs::Point::ConstPtr& msg) {
-    moveFromCurrentState(msg->x, msg->y, msg->z);
+  void pickAtCallback(const geometry_msgs::Pose::ConstPtr& msg) {
+    if (FLAG_MOVE == false){
+      moveFromCurrentState(msg->position.x, msg->position.y, msg->position.z);
+    }
+
     storeOnUGV();
   }
 
@@ -244,11 +250,7 @@ public:
       move_group.attachObject(magnet_panel.id); // attach the magnet panel to end-effector
   }
 
-  void moveArm() {
 
-    moveToDefault();
-
-  }
 
   void moveToFront(){
     moveit::core::RobotStatePtr current_state = move_group.getCurrentState();
@@ -291,47 +293,52 @@ public:
     std::vector<double> joint_group_positions;
     current_state->copyJointGroupPositions(joint_model_group, joint_group_positions);
 
-    moveToFront();
 
-    robot_state::RobotState init_state(*move_group.getCurrentState()); // save init state
-    geometry_msgs::Pose target_pose3 = move_group.getCurrentPose().pose;
+      moveToFront();
 
-    // ========== Cartesian Paths up ========== //
+      robot_state::RobotState init_state(*move_group.getCurrentState()); // save init state
+      geometry_msgs::Pose target_pose3 = move_group.getCurrentPose().pose;
 
-    std::vector<geometry_msgs::Pose> waypoints_up;
-    target_pose3 = move_group.getCurrentPose().pose; // Cartesian Path from the current position
-    waypoints_up.push_back(target_pose3);
+      // ========== Cartesian Paths up ========== //
 
-    target_pose3.position.z += 0.30;        // up to default position => the highest we can go ~140 cm
-    waypoints_up.push_back(target_pose3);   // back to the position before going down
+      std::vector<geometry_msgs::Pose> waypoints_up;
+      target_pose3 = move_group.getCurrentPose().pose; // Cartesian Path from the current position
+      waypoints_up.push_back(target_pose3);
 
-    move_group.setMaxVelocityScalingFactor(0.1); // Cartesian motions are needed to be slower
+      target_pose3.position.z += 0.30;        // up to default position => the highest we can go ~140 cm
+      waypoints_up.push_back(target_pose3);   // back to the position before going down
 
-    // We want the Cartesian path to be interpolated at a resolution of 1 cm
-    moveit_msgs::RobotTrajectory trajectory_up;
+      move_group.setMaxVelocityScalingFactor(0.1); // Cartesian motions are needed to be slower
 
-    fraction = move_group.computeCartesianPath(waypoints_up, eef_step, jump_threshold, trajectory_up);
-    ROS_INFO_NAMED("tutorial", "Visualizing CartesianPath up (%.2f%% acheived)", fraction * 100.0);
+      // We want the Cartesian path to be interpolated at a resolution of 1 cm
+      moveit_msgs::RobotTrajectory trajectory_up;
 
-    cartesian_plan.trajectory_ = trajectory_up;
+      fraction = move_group.computeCartesianPath(waypoints_up, eef_step, jump_threshold, trajectory_up);
+      ROS_INFO_NAMED("tutorial", "Visualizing CartesianPath up (%.2f%% acheived)", fraction * 100.0);
 
-    // Visualize the plan in RViz
-    visual_tools.deleteAllMarkers();
-    visual_tools.publishText(text_pose, "Joint Space Goal", rvt::WHITE, rvt::XLARGE);
-    visual_tools.publishPath(waypoints_up, rvt::LIME_GREEN, rvt::SMALL);
-    for (std::size_t i = 0; i < waypoints_up.size(); ++i)
-      visual_tools.publishAxisLabeled(waypoints_up[i], "pt" + std::to_string(i), rvt::SMALL);
-    visual_tools.trigger();
+      cartesian_plan.trajectory_ = trajectory_up;
 
-  #ifdef DEBUG
-    visual_tools.prompt("Press 'next' to go to default position");
-  #endif
-    move_group.execute(cartesian_plan);
-    ros::Duration(DELAY).sleep();           // wait for robot to update current state otherwise failed
+      // Visualize the plan in RViz
+      visual_tools.deleteAllMarkers();
+      visual_tools.publishText(text_pose, "Joint Space Goal", rvt::WHITE, rvt::XLARGE);
+      visual_tools.publishPath(waypoints_up, rvt::LIME_GREEN, rvt::SMALL);
+      for (std::size_t i = 0; i < waypoints_up.size(); ++i)
+        visual_tools.publishAxisLabeled(waypoints_up[i], "pt" + std::to_string(i), rvt::SMALL);
+      visual_tools.trigger();
+
+    #ifdef DEBUG
+      visual_tools.prompt("Press 'next' to go to default position");
+    #endif
+      move_group.execute(cartesian_plan);
+      ros::Duration(DELAY).sleep();           // wait for robot to update current state otherwise failed
+
+
+
 
   };
 
   void moveFromCurrentState(float toX, float toY, float toZ){
+    FLAG_MOVE = true;
 
     geometry_msgs::Pose target_pose = move_group.getCurrentPose().pose;
     std::vector<geometry_msgs::Pose> waypoints_down;
@@ -340,7 +347,7 @@ public:
 
     target_pose.position.x += toX; //0.21; // + right
     target_pose.position.y += toY; //0.09; // + front
-    target_pose.position.z += toZ; //0.72; // + up
+    target_pose.position.z -= (toZ - Z_OFFSET); //0.72; // + up
     waypoints_down.push_back(target_pose);    // back to the position before going down
 
     move_group.setMaxVelocityScalingFactor(0.1); // Cartesian motions are needed to be slower
@@ -368,6 +375,8 @@ public:
 
     move_group.execute(cartesian_plan);
     ros::Duration(DELAY).sleep();           // wait for robot to update current state otherwise failed
+
+
   };
 
   void storeOnUGV(){
@@ -408,6 +417,10 @@ public:
     // counting for stacking bricks case
     moveFromCurrentState(0.20, 0, 0);
     moveFromCurrentState(0.00, 0, -0.20);
+    ////////////////////////////////////////////////////
+
+    // go back to default position after finishing storing the bricks
+    moveToDefault();
 
   };
 
