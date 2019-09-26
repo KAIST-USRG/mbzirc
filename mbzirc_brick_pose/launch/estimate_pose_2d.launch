@@ -1,4 +1,5 @@
 <launch>
+    <include file="$(find mbzirc_brick_pose)/launch/rs_rgbd.xml" />
     <arg name="h_min1" default="0"/>
     <arg name="h_max1" default="15" />
     <arg name="h_min2" default="150" />
