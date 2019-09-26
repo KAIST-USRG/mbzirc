@@ -1,0 +1,42 @@
+<launch>
+    <arg name="h_min1" default="0"/>
+    <arg name="h_max1" default="15" />
+    <arg name="h_min2" default="150" />
+    <arg name="h_max2" default="180" />
+
+    <arg name="s_min" default="30" />
+    <arg name="s_max" default="255" />
+    <arg name="v_min" default="30" />
+    <arg name="v_max" default="255" />
+
+    <arg name="edge_low_thres" default="50" />
+    <arg name="edge_high_thres" default="100" />
+
+    <arg name="error_thresh" default="0.15" />
+    
+
+    <!-- m scale-->
+    <arg name="short_real_length" default="0.2" /> <!-- 0.2 -->
+    <arg name="long_real_length" default="0.3" /> <!-- 0.3 -->
+    
+
+    <node pkg="estimate_pose_2d" type="estimate_pose_2d" name="estimate_pose_2d" output="screen">
+        <param name="h_min1" value="$(arg h_min1)"/>   
+        <param name="h_max1" value="$(arg h_max1)"/>
+        <param name="h_min2" value="$(arg h_min2)"/>
+        <param name="h_max2" value="$(arg h_max2)"/>
+
+        <param name="s_min" value="$(arg s_min)"/>
+        <param name="s_max" value="$(arg s_max)"/>
+        <param name="v_min" value="$(arg v_min)"/>
+        <param name="v_max" value="$(arg v_max)"/>
+
+        <param name="edge_low_thres" value="$(arg edge_low_thres)"/>
+        <param name="edge_high_thres" value="$(arg edge_high_thres)"/>
+
+        <param name="error_thresh" value="$(arg error_thresh)"/>
+        
+        <param name="short_real_length" value="$(arg short_real_length)"/>
+        <param name="long_real_length" value="$(arg long_real_length)"/>
+    </node>
+</launch>
