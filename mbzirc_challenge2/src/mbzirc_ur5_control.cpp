@@ -170,7 +170,7 @@ public:
       primitive_UGV_base.type = primitive_UGV_base.BOX;
       primitive_UGV_base.dimensions.resize(3);
       primitive_UGV_base.dimensions[0] = 0.66;  // x right
-      primitive_UGV_base.dimensions[1] = 0.42;  // y front
+      primitive_UGV_base.dimensions[1] = 0.55;  // y front
       primitive_UGV_base.dimensions[2] = 0.26;  // z up
 
       geometry_msgs::Pose pose_UGV_base; // Define a pose for the Robot_bottom (specified relative to frame_id)
@@ -376,8 +376,8 @@ public:
     waypoints_down.push_back(target_pose);
 
     target_pose.position.x += toX; //0.21; // + right
-    target_pose.position.y += toY; //0.09; // + front
-    target_pose.position.z -= (toZ - Z_OFFSET); //0.72; // + up
+    target_pose.position.y += (toY + 0.1); //0.09; // + front
+    target_pose.position.z -= (toZ - 0.05); //0.72; // + up
     waypoints_down.push_back(target_pose);    // back to the position before going down
 
     move_group.setMaxVelocityScalingFactor(0.1); // Cartesian motions are needed to be slower
@@ -440,6 +440,7 @@ public:
     visual_tools.prompt("Press 'next' to front position");
   #endif
 
+    visual_tools.prompt("Press 'next' to front position");
     move_group.move(); //move to default position, arm in front of the robot
     ros::Duration(DELAY).sleep();           // wait for robot to update current state otherwise failed
 
