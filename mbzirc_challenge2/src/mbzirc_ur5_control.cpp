@@ -375,8 +375,8 @@ public:
     target_pose = move_group.getCurrentPose().pose; // Cartesian Path from the current position
     waypoints_down.push_back(target_pose);
 
-    target_pose.position.x += toX; //0.21; // + right
-    target_pose.position.y += (toY + 0.1); //0.09; // + front
+    target_pose.position.x -= toX; //0.21; // + right
+    target_pose.position.y -= toY ; //0.09; // + front
     target_pose.position.z -= (toZ - 0.05); //0.72; // + up
     waypoints_down.push_back(target_pose);    // back to the position before going down
 
@@ -447,8 +447,8 @@ public:
     ////////////////////////////////////////////////////
     // ****************** NEED TUNING ************************
     // counting for stacking bricks case
-    moveFromCurrentState(0.10, 0, 0);
-    moveFromCurrentState(0.00, 0, 0.20);
+    moveFromCurrentState(-0.10, 0, 0);
+    moveFromCurrentState(0.00, 0, -0.20);
     ////////////////////////////////////////////////////
 
     // go back to default position after finishing storing the bricks
