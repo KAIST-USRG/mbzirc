@@ -133,7 +133,7 @@ public:
 
       // Seong) Set planner, Max velo and Planning time
       move_group.setPlannerId("RRTConnectkConfigDefault");
-      move_group.setMaxVelocityScalingFactor(0.3);
+      move_group.setMaxVelocityScalingFactor(0.1);
       move_group.setPlanningTime(PLANNING_TIMEOUT);
 
       // class to add and remove collision objects in our "virtual world" scene
@@ -453,7 +453,8 @@ public:
 
     // go back to default position after finishing storing the bricks
     moveToDefault();
-
+    FLAG_MOVE = false;
+    FLAG_STORE = false;
   };
 
 
