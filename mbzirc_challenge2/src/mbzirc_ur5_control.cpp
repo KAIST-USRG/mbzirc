@@ -66,7 +66,7 @@ bool atDefaultPose = false;
 bool finishPicking = false;
 bool finishStoring = false;
 bool FLAG_MOVE = false;
-
+bool FLAG_STORE = false;
 
 // =============================== call back function ==================================== //
 class Arm{
@@ -123,8 +123,10 @@ public:
     if (FLAG_MOVE == false){
       moveFromCurrentState(msg->position.x, msg->position.y, msg->position.z);
     }
+    if (FLAG_STORE == false){
+      storeOnUGV();
+    }
 
-    storeOnUGV();
   }
 
   void initWall() {
@@ -408,6 +410,7 @@ public:
   };
 
   void storeOnUGV(){
+    FLAG_STORE = true;
     moveit::core::RobotStatePtr current_state = move_group.getCurrentState();
     //
     // Next get the current set of joint values for the group.
@@ -443,8 +446,8 @@ public:
     ////////////////////////////////////////////////////
     // ****************** NEED TUNING ************************
     // counting for stacking bricks case
-    moveFromCurrentState(0.20, 0, 0);
-    moveFromCurrentState(0.00, 0, -0.20);
+    moveFromCurrentState(0.10, 0, 0);
+    moveFromCurrentState(0.00, 0, 0.20);
     ////////////////////////////////////////////////////
 
     // go back to default position after finishing storing the bricks
