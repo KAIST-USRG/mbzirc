@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 2.8)
-project(mbzirc_birck_pose)
+project(mbzirc_brick_pose)
 
 add_definitions(-std=c++11)
 

@@ -1,5 +1,5 @@
 <launch>
-    <include file="$(find mbzirc_brick_pose)/launch/rs_rgbd.xml" />
+    <include file="$(find mbzirc_brick_pose)/launch/rs_rgbd.launch" />
     <arg name="h_min1" default="0"/>
     <arg name="h_max1" default="15" />
     <arg name="h_min2" default="150" />
@@ -21,7 +21,8 @@
     <arg name="long_real_length" default="0.3" /> <!-- 0.3 -->
     
 
-    <node pkg="estimate_pose_2d" type="estimate_pose_2d" name="estimate_pose_2d" output="screen">
+    <node pkg="mbzirc_brick_pose" type="estimate_pose_2d" name="estimate_pose_2d" output="screen">
+        <remap from="real_sense/block_pose" to="pickAt" />
         <param name="h_min1" value="$(arg h_min1)"/>   
         <param name="h_max1" value="$(arg h_max1)"/>
         <param name="h_min2" value="$(arg h_min2)"/>

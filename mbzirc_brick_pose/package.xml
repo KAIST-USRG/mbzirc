@@ -1,6 +1,6 @@
 <?xml version="1.0"?>
 <package format="2">
-  <name>mbzirc_birck_pose</name>
+  <name>mbzirc_brick_pose</name>
   <version>0.0.0</version>
   <description>The estimate_pose_2d package</description>
 
