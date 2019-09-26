@@ -212,6 +212,33 @@ public:
       UGV_body.primitive_poses.push_back(pose_UGV_body);
       UGV_body.operation = UGV_body.ADD;
 
+      // ---------- Little wall
+      moveit_msgs::CollisionObject Wall; // Define a collision object ROS message.
+      Wall.header.frame_id = move_group.getPlanningFrame();
+
+      Wall.id = "Wall"; // The id of the object is used to identify it.
+
+      shape_msgs::SolidPrimitive primitive_Wall;
+      primitive_Wall.type = primitive_Wall.BOX;
+      primitive_Wall.dimensions.resize(3);
+      primitive_Wall.dimensions[0] = 0.48;  // x
+      primitive_Wall.dimensions[1] = 0.08;  // y
+      primitive_Wall.dimensions[2] = 0.32;  // z
+
+      geometry_msgs::Pose pose_Wall;
+      q.setRPY(0, 0, 0);
+      pose_Wall.orientation.x = q[0];
+      pose_Wall.orientation.y = q[1];
+      pose_Wall.orientation.z = q[2];
+      pose_Wall.orientation.w = q[3];
+      pose_Wall.position.x =  0;
+      pose_Wall.position.y =  0.32;
+      pose_Wall.position.z =  -0.10;
+
+      Wall.primitives.push_back(primitive_Wall);
+      Wall.primitive_poses.push_back(pose_Wall);
+      Wall.operation = Wall.ADD;
+
       // ---------- Magnet Panel at end effector
       moveit_msgs::CollisionObject magnet_panel; // Define a collision object ROS message.
       magnet_panel.header.frame_id = move_group.getEndEffectorLink(); // reference to end-effector frame
@@ -244,6 +271,7 @@ public:
       collision_robot_body.push_back(magnet_panel);
       collision_robot_body.push_back(UGV_base);
       collision_robot_body.push_back(UGV_body);
+      collision_robot_body.push_back(Wall);
       planning_scene_interface.addCollisionObjects(collision_robot_body); //add the collision object into the world
       ros::Duration(DELAY).sleep(); // wait to build the object before attaching to ee
 
