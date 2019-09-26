@@ -8,7 +8,7 @@
   <arg     if="$(arg debug)" name="launch_prefix"
      value="gdb -x $(find panda_moveit_config)/launch/gdb_settings.gdb --ex run --args" />
 
-  <node name="move_group_interface_tutorial" pkg="mbzirc_challenge2" type="mbzirc_ur5_control" respawn="false" launch-prefix="$(arg launch_prefix)" output="screen">
+  <node name="UR5_controller" pkg="mbzirc_challenge2" type="mbzirc_ur5_control" respawn="false" launch-prefix="$(arg launch_prefix)" output="screen">
   </node>
 
 </launch>
