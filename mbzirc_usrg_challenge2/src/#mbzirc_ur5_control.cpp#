@@ -48,7 +48,7 @@
 #include "ros/ros.h"
 #include "std_msgs/String.h"
 #include "geometry_msgs/Point.h"
-#include "geometry_msgs/Pose.h"
+
 
 //#define DEBUG
 #define DELAY 1.0         // for sleep function => robot updating states => 0.4 s fail (?)
