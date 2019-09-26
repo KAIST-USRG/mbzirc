@@ -13,10 +13,10 @@ find_package(catkin REQUIRED COMPONENTS
 )
 
 catkin_package(
-  INCLUDE_DIRS include
+  #INCLUDE_DIRS include
   LIBRARIES mbzirc_usrg_wheel_control
   CATKIN_DEPENDS dynamixel_sdk dynamixel_workbench_msgs geometry_msgs nav_msgs roscpp rospy sensor_msgs std_msgs
-  DEPENDS system_lib
+  #DEPENDS system_lib
 )
 
 ###########
