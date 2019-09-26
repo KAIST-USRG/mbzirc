@@ -375,7 +375,7 @@ public:
     target_pose = move_group.getCurrentPose().pose; // Cartesian Path from the current position
     waypoints_down.push_back(target_pose);
 
-    target_pose.position.x -= toX; //0.21; // + right
+    target_pose.position.x += toX; //0.21; // + right
     target_pose.position.y -= toY ; //0.09; // + front
     target_pose.position.z -= (toZ - 0.05); //0.72; // + up
     waypoints_down.push_back(target_pose);    // back to the position before going down
