@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 2.8.3)
-project(mbzirc_usrg_challenge2)
+project(mbzirc_challenge2)
 
 add_compile_options(-std=c++11)
 

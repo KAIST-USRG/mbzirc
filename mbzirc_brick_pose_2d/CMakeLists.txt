@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 2.8)
-project(mbzirc_usrg_birck_pose_2d)
+project(mbzirc_birck_pose_2d)
 
 add_definitions(-std=c++11)
 

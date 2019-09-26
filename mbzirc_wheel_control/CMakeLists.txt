@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 2.8.3)
-project(mbzirc_usrg_wheel_control)
+project(mbzirc_wheel_control)
 
 find_package(catkin REQUIRED COMPONENTS
   dynamixel_sdk
