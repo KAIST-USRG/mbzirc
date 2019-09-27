@@ -69,6 +69,8 @@ bool FLAG_AT_DEFAULT = false;
 bool FLAG_MOVED = false;
 bool FLAG_FINISH_PICK = false;
 bool FLAG_STORED = false;
+bool FLAG_FINISH_UNLOAD1 = true;
+bool FLAG_FINISH_UNLOAD2 = true;
 
 int gb_count_pose_msg = 0;
 int gb_discard_noise = 0;
@@ -150,9 +152,8 @@ public:
       gb_y_sum += msg->position.y;
       gb_z_sum += msg->position.z;
       gb_count_pose_msg += 1;
-    }else{
-
-      if(FLAG_AT_DEFAULT == true && FLAG_MOVED == false){ // picking up should start from DEFAULT position
+    }else if(FLAG_AT_DEFAULT == true && FLAG_MOVED == false &&
+              FLAG_FINISH_UNLOAD1 == true && FLAG_FINISH_UNLOAD2 == true){ // picking up should start from DEFAULT position
         int n = NUM_SUM - NUM_DISCARD;
         ROS_INFO("x = %lf, y = %lf, z =%lf", gb_x_sum/n, gb_y_sum/n, gb_z_sum/n);
         FLAG_MOVED = true;
@@ -164,13 +165,18 @@ public:
         gb_x_sum = 0;
         gb_y_sum = 0;
         gb_z_sum = 0;
-      }
+
     }
 
 
     if (FLAG_FINISH_PICK == true && FLAG_STORED == false){  // store only after picking bricks
-      storeOnUGV();
-      unloadTo(0,0,0);
+      storeOnUGV(1);
+//      FLAG_FINISH_UNLOAD1 = false;
+//      FLAG_FINISH_UNLOAD2 = false;
+//      unloadTo(0,0,0, 2);
+//      FLAG_FINISH_UNLOAD2 = true;
+//      unloadTo(0,0,0, 1);
+//      FLAG_FINISH_UNLOAD1 = true;
     }
 
   }
@@ -407,8 +413,8 @@ public:
       visual_tools.prompt("Press 'next' to go to default position");
     #endif
       move_group.execute(cartesian_plan);
-      ros::Duration(5*DELAY).sleep(); //sleep for 2 s to wait for stable msg from camera
       FLAG_AT_DEFAULT = true;
+      ros::Duration(5*DELAY).sleep(); //sleep for 5 s to wait for stable msg from camera
   };
 
   void moveFromCurrentState(float toX, float toY, float toZ, bool isPicking){
@@ -507,67 +513,68 @@ public:
 
   void moveToStorage(){
 
-    if (FLAG_AT_DEFAULT == true){
-      moveit::core::RobotStatePtr current_state = move_group.getCurrentState();
-          // Next get the current set of joint values for the group.
-          std::vector<double> joint_group_positions;
-          current_state->copyJointGroupPositions(joint_model_group, joint_group_positions);
-          // Now, let's modify one of the joints, plan to the new joint space goal and visualize the plan.
-          moveToFront();  // to front position
+    moveToDefault();
+    moveit::core::RobotStatePtr current_state = move_group.getCurrentState();
+    // Next get the current set of joint values for the group.
+    std::vector<double> joint_group_positions;
+    current_state->copyJointGroupPositions(joint_model_group, joint_group_positions);
+    // Now, let's modify one of the joints, plan to the new joint space goal and visualize the plan.
+    // rotate left 90 Deg to store bricks
+    joint_group_positions[0] = PI;  // radians
+    move_group.setJointValueTarget(joint_group_positions);
+    move_group.setPlanningTime(PLANNING_TIMEOUT);
+    move_group.setMaxVelocityScalingFactor(0.1); // Cartesian motions are needed to be slower
 
-          // rotate left 90 Deg to store bricks
-          joint_group_positions[0] = PI;  // radians
-      //    joint_group_positions[1] = -PI/2;  // radians
-      //    joint_group_positions[2] = PI/2;  // radians
-      //    joint_group_positions[3] = -PI/2;  // radians
-      //    joint_group_positions[4] = -PI/2;  // radians
-      //    joint_group_positions[5] = 0;  // radians
-          move_group.setJointValueTarget(joint_group_positions);
-          move_group.setPlanningTime(PLANNING_TIMEOUT);
-          move_group.setMaxVelocityScalingFactor(0.1); // Cartesian motions are needed to be slower
+    success = (move_group.plan(my_plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS);
+    ROS_INFO_NAMED("tutorial", "Visualizing Initial joint plan (joint space goal) %s", success ? "" : "FAILED");
 
-          success = (move_group.plan(my_plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS);
-          ROS_INFO_NAMED("tutorial", "Visualizing Initial joint plan (joint space goal) %s", success ? "" : "FAILED");
+    // Visualize the plan in RViz
+    visual_tools.deleteAllMarkers();
+    visual_tools.publishText(text_pose, "Joint Space Goal", rvt::WHITE, rvt::XLARGE);
+    visual_tools.publishTrajectoryLine(my_plan.trajectory_, joint_model_group);
+    visual_tools.trigger();
 
-          // Visualize the plan in RViz
-          visual_tools.deleteAllMarkers();
-          visual_tools.publishText(text_pose, "Joint Space Goal", rvt::WHITE, rvt::XLARGE);
-          visual_tools.publishTrajectoryLine(my_plan.trajectory_, joint_model_group);
-          visual_tools.trigger();
+    #ifdef DEBUG
+        visual_tools.prompt("Press 'next' to front position");
+    #endif
 
-        #ifdef DEBUG
-          visual_tools.prompt("Press 'next' to front position");
-        #endif
+    move_group.move(); //move to storage on left side
+    ros::Duration(DELAY).sleep();           // wait for robot to update current state otherwise failed
 
-          move_group.move(); //move to storage on left side
-          ros::Duration(DELAY).sleep();           // wait for robot to update current state otherwise failed
-    }
 
   };
 
-  void storeOnUGV(){
-
+  void storeOnUGV(int count){
+    ROS_INFO("Storing: count = %d", count);
     FLAG_STORED = true;
     moveToStorage();
 
     geometry_msgs::Pose target_pose = move_group.getCurrentPose().pose;
     target_pose = move_group.getCurrentPose().pose;
-    moveTo(0.145, target_pose.position.y, 0.345); // bring arm backward and down
+    if (count == 1){
+      moveTo(0.145, target_pose.position.y, 0.345); // bring arm backward and down
+    }else if (count == 2){
+      moveTo(0.145, target_pose.position.y, 0.345 + 22); // bring arm backward and down
+    }
     
     magnet_msg.data = false;
     magnet_pub.publish(magnet_msg); // MAGNET OFF
 
     // go back to default position after finishing storing the bricks
     moveToDefault();
+
+
     magnet_msg.data = true;
     magnet_pub.publish(magnet_msg); // MAGNET ON
 
     FLAG_MOVED = false;
     FLAG_STORED = false;
     FLAG_FINISH_PICK = false;
+
   };
 
-  void unloadTo(float atX, float atY, float atZ){
+  void unloadTo(float atX, float atY, float atZ, int count){
+    ROS_INFO("unloadTo: count = %d", count);
     // unload to absolute coordinate w.r.t. base-frame
     magnet_msg.data = true;
     magnet_pub.publish(magnet_msg); // MAGNET ON
@@ -575,7 +582,12 @@ public:
     moveToStorage();
     geometry_msgs::Pose target_pose = move_group.getCurrentPose().pose;
     target_pose = move_group.getCurrentPose().pose;
-    moveTo(0.145, target_pose.position.y, 0.342); // go to the stored brick
+    if (count == 1){
+      moveTo(0.145, target_pose.position.y, 0.342); // go to the below stored brick
+    }else if(count == 2){
+      moveTo(0.145, target_pose.position.y, 0.342 + 0.20); // go to the upper stored brick
+    }
+
     moveToFront();
     moveTo(atX, atY, (atZ + 0.345)); //0.345 = brick height + magnetic
 
