@@ -506,39 +506,43 @@ public:
   };
 
   void moveToStorage(){
-    moveit::core::RobotStatePtr current_state = move_group.getCurrentState();
-    // Next get the current set of joint values for the group.
-    std::vector<double> joint_group_positions;
-    current_state->copyJointGroupPositions(joint_model_group, joint_group_positions);
-    // Now, let's modify one of the joints, plan to the new joint space goal and visualize the plan.
-    moveToFront();  // to front position
 
-    // rotate left 90 Deg to store bricks
-    joint_group_positions[0] = PI;  // radians
-    joint_group_positions[1] = -PI/2;  // radians
-    joint_group_positions[2] = PI/2;  // radians
-    joint_group_positions[3] = -PI/2;  // radians
-    joint_group_positions[4] = -PI/2;  // radians
-    joint_group_positions[5] = 0;  // radians
-    move_group.setJointValueTarget(joint_group_positions);
-    move_group.setPlanningTime(PLANNING_TIMEOUT);
-    move_group.setMaxVelocityScalingFactor(0.1); // Cartesian motions are needed to be slower
+    if (FLAG_AT_DEFAULT == true){
+      moveit::core::RobotStatePtr current_state = move_group.getCurrentState();
+          // Next get the current set of joint values for the group.
+          std::vector<double> joint_group_positions;
+          current_state->copyJointGroupPositions(joint_model_group, joint_group_positions);
+          // Now, let's modify one of the joints, plan to the new joint space goal and visualize the plan.
+          moveToFront();  // to front position
 
-    success = (move_group.plan(my_plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS);
-    ROS_INFO_NAMED("tutorial", "Visualizing Initial joint plan (joint space goal) %s", success ? "" : "FAILED");
+          // rotate left 90 Deg to store bricks
+          joint_group_positions[0] = PI;  // radians
+      //    joint_group_positions[1] = -PI/2;  // radians
+      //    joint_group_positions[2] = PI/2;  // radians
+      //    joint_group_positions[3] = -PI/2;  // radians
+      //    joint_group_positions[4] = -PI/2;  // radians
+      //    joint_group_positions[5] = 0;  // radians
+          move_group.setJointValueTarget(joint_group_positions);
+          move_group.setPlanningTime(PLANNING_TIMEOUT);
+          move_group.setMaxVelocityScalingFactor(0.1); // Cartesian motions are needed to be slower
 
-    // Visualize the plan in RViz
-    visual_tools.deleteAllMarkers();
-    visual_tools.publishText(text_pose, "Joint Space Goal", rvt::WHITE, rvt::XLARGE);
-    visual_tools.publishTrajectoryLine(my_plan.trajectory_, joint_model_group);
-    visual_tools.trigger();
+          success = (move_group.plan(my_plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS);
+          ROS_INFO_NAMED("tutorial", "Visualizing Initial joint plan (joint space goal) %s", success ? "" : "FAILED");
 
-  #ifdef DEBUG
-    visual_tools.prompt("Press 'next' to front position");
-  #endif
+          // Visualize the plan in RViz
+          visual_tools.deleteAllMarkers();
+          visual_tools.publishText(text_pose, "Joint Space Goal", rvt::WHITE, rvt::XLARGE);
+          visual_tools.publishTrajectoryLine(my_plan.trajectory_, joint_model_group);
+          visual_tools.trigger();
 
-    move_group.move(); //move to storage on left side
-    ros::Duration(DELAY).sleep();           // wait for robot to update current state otherwise failed
+        #ifdef DEBUG
+          visual_tools.prompt("Press 'next' to front position");
+        #endif
+
+          move_group.move(); //move to storage on left side
+          ros::Duration(DELAY).sleep();           // wait for robot to update current state otherwise failed
+    }
+
   };
 
   void storeOnUGV(){
