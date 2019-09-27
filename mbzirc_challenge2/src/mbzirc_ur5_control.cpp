@@ -590,12 +590,15 @@ public:
     moveToStorage();
     geometry_msgs::Pose target_pose = move_group.getCurrentPose().pose;
     target_pose = move_group.getCurrentPose().pose;
+
+    // picking up from storage
     if (count == 1){
       moveTo(-0.35, target_pose.position.y, 0.342); // go to the below stored brick
     }else if(count == 2){
       moveTo(-0.35, target_pose.position.y, 0.342 + 0.20); // go to the upper stored brick
     }
 
+    // placing down at X, Y, Z w.r.t. to base-frame
     moveToFront();
     moveTo(atX, atY, (atZ + 0.345)); //0.345 = brick height + magnetic
 
@@ -603,6 +606,7 @@ public:
     magnet_msg.data = false;
     magnet_pub.publish(magnet_msg); // MAGNET OFF
 
+    // go back to default position
     moveToDefault();
     magnet_msg.data = true;
     magnet_pub.publish(magnet_msg); // MAGNET ON
