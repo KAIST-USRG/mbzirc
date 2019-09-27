@@ -54,7 +54,8 @@
 #define DELAY 1.0         // for sleep function => robot updating states => 0.4 s fail (?)
 #define END_EFFECTOR 0.07
 #define PLANNING_TIMEOUT 20
-#define Z_OFFSET 0.05
+#define Z_OFFSET 0.03
+#define NUM_SUM 10      // to average the pose msg
 
 namespace rvt = rviz_visual_tools;
 
@@ -66,6 +67,11 @@ bool FLAG_AT_DEFAULT = false;
 bool FLAG_MOVED = false;
 bool FLAG_FINISH_PICK = false;
 bool FLAG_STORED = false;
+
+int COUNT_POSE_MSG = 0;
+float X_SUM = 0;
+float Y_SUM = 0;
+float Z_SUM = 0;
 
 // =============================== call back function ==================================== //
 class Arm{
@@ -109,7 +115,7 @@ public:
     text_pose = Eigen::Isometry3d::Identity();
 
     initWall();
-    visual_tools.prompt("Press 'next' to go Default position");
+//    visual_tools.prompt("Press 'next' to go Default position");
     moveToDefault();
 
     sub1 = nh.subscribe("/chatter1", 1000, &Arm::chatterCallback1, this);
@@ -123,13 +129,27 @@ public:
   }
 
   void pickAtCallback(const geometry_msgs::Pose::ConstPtr& msg) {
-    if(FLAG_AT_DEFAULT == true && FLAG_MOVED == false){ // picking up should start from DEFAULT position
-      ROS_INFO("x = %lf, y = %lf, z =%lf", msg->position.x, msg->position.y, msg->position.z);
-      FLAG_MOVED = true;
-      FLAG_AT_DEFAULT = false;
-      visual_tools.prompt("Press 'next' to go to get bricks");
-      moveFromCurrentState(msg->position.x, msg->position.y, msg->position.z, true);
+    if (FLAG_AT_DEFAULT == true && COUNT_POSE_MSG < NUM_SUM){
+      X_SUM += msg->position.x;
+      Y_SUM += msg->position.y;
+      Z_SUM += msg->position.z;
+      COUNT_POSE_MSG += 1;
+    }else{
+
+      if(FLAG_AT_DEFAULT == true && FLAG_MOVED == false){ // picking up should start from DEFAULT position
+        ROS_INFO("x = %lf, y = %lf, z =%lf", X_SUM/NUM_SUM, Y_SUM/NUM_SUM, Z_SUM/NUM_SUM);
+        FLAG_MOVED = true;
+        FLAG_AT_DEFAULT = false;
+        visual_tools.prompt("Press 'next' to go to get bricks");
+        moveFromCurrentState(X_SUM/NUM_SUM, Y_SUM/NUM_SUM, Z_SUM/NUM_SUM, true);
+
+        COUNT_POSE_MSG = 0;
+        X_SUM = 0;
+        Y_SUM = 0;
+        Z_SUM = 0;
+      }
     }
+
 
     if (FLAG_FINISH_PICK == true && FLAG_STORED == false){  // store only after picking bricks
       storeOnUGV();
@@ -370,7 +390,7 @@ public:
     #endif
       move_group.execute(cartesian_plan);
       FLAG_AT_DEFAULT = true;
-      ros::Duration(3).sleep(); //sleep for 2 s to wait for stable msg from camera
+      ros::Duration(2*DELAY).sleep(); //sleep for 2 s to wait for stable msg from camera
 
   };
 
@@ -385,7 +405,12 @@ public:
 
     target_pose.position.x += toX; //0.21; // + right
     target_pose.position.y -= toY ; //0.09; // + front
-    target_pose.position.z -= (toZ - Z_OFFSET); //0.72; // + up
+    if (isPicking == true){
+      target_pose.position.z -= (toZ - Z_OFFSET); //0.72; // + up
+    }else{
+      target_pose.position.z -= toZ; // + up
+    }
+
     waypoints_down.push_back(target_pose);    // back to the position before going down
 
     move_group.setMaxVelocityScalingFactor(0.1); // Cartesian motions are needed to be slower
@@ -416,6 +441,7 @@ public:
 
     if (isPicking == true){     // to inform that robot has done picking job
       FLAG_FINISH_PICK = true;
+      ros::Duration(2*DELAY).sleep();
     }else{
       FLAG_FINISH_PICK = false;
     }
