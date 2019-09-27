@@ -411,8 +411,6 @@ public:
   };
 
   void moveFromCurrentState(float toX, float toY, float toZ, bool isPicking){
-//    FLAG_MOVED = true;
-//    FLAG_AT_DEFAULT = false;
 
     geometry_msgs::Pose target_pose = move_group.getCurrentPose().pose;
     std::vector<geometry_msgs::Pose> waypoints_down;
@@ -426,8 +424,8 @@ public:
       waypoints_down.push_back(target_pose);    // back to the position before going down
     }else{
       target_pose.position.x += toX; // + right
-      // target_pose.position.y = toY; // + front
-      target_pose.position.z = toZ; // + up
+      target_pose.position.y += toY; // + front
+      target_pose.position.z += toZ; // + up
       waypoints_down.push_back(target_pose);    // back to the position before going down
     }
 
@@ -465,10 +463,49 @@ public:
     }
   };
 
-  void storeOnUGV(){
-    FLAG_STORED = true;
+  void moveTo(float toX, float toY, float toZ){
+
+    geometry_msgs::Pose target_pose = move_group.getCurrentPose().pose;
+    std::vector<geometry_msgs::Pose> waypoints_To;
+    target_pose = move_group.getCurrentPose().pose; // Cartesian Path from the current position
+    waypoints_To.push_back(target_pose);
+
+    target_pose.position.x = toX; // + right
+    target_pose.position.y = toY; // + front
+    target_pose.position.z = toZ; // + up
+
+    waypoints_To.push_back(target_pose);    // back to the position before going down
+
+    move_group.setMaxVelocityScalingFactor(0.1); // Cartesian motions are needed to be slower
+
+    // We want the Cartesian path to be interpolated at a resolution of 1 cm
+    moveit_msgs::RobotTrajectory trajectory_down;
+
+    fraction = move_group.computeCartesianPath(waypoints_To, eef_step, jump_threshold, trajectory_down);
+    ROS_INFO_NAMED("tutorial", "Visualizing CartesianPath down (%.2f%% acheived)", fraction * 100.0);
+
+    cartesian_plan.trajectory_ = trajectory_down;
+
+    // Visualize the plan in RViz
+    visual_tools.deleteAllMarkers();
+    visual_tools.publishText(text_pose, "Joint Space Goal", rvt::WHITE, rvt::XLARGE);
+    visual_tools.publishPath(waypoints_To, rvt::LIME_GREEN, rvt::SMALL);
+    for (std::size_t i = 0; i < waypoints_To.size(); ++i)
+      visual_tools.publishAxisLabeled(waypoints_To[i], "pt" + std::to_string(i), rvt::SMALL);
+    visual_tools.trigger();
+
+  #ifdef DEBUG
+    visual_tools.prompt("Press 'next' to go down");
+    ros::Duration(DELAY).sleep();
+  #endif
+
+    move_group.execute(cartesian_plan);
+    ros::Duration(DELAY).sleep();           // wait for robot to update current state otherwise failed
+
+  };
+
+  void moveToStorage(){
     moveit::core::RobotStatePtr current_state = move_group.getCurrentState();
-    //
     // Next get the current set of joint values for the group.
     std::vector<double> joint_group_positions;
     current_state->copyJointGroupPositions(joint_model_group, joint_group_positions);
@@ -499,30 +536,52 @@ public:
     visual_tools.prompt("Press 'next' to front position");
   #endif
 
-//    visual_tools.prompt("Press 'next' to front position");
-    move_group.move(); //move to default position, arm in front of the robot
+    move_group.move(); //move to storage on left side
     ros::Duration(DELAY).sleep();           // wait for robot to update current state otherwise failed
+  };
 
-    ////////////////////////////////////////////////////
-    // ****************** NEED TUNING ************************
-    // counting for stacking bricks case
-    // moveFromCurrentState(0.10, 0, 0, false);
-    moveFromCurrentState(0.145, 0, 0.345, false);
+  void storeOnUGV(){
+
+    FLAG_STORED = true;
+    moveToStorage();
+
+    geometry_msgs::Pose target_pose = move_group.getCurrentPose().pose;
+    target_pose = move_group.getCurrentPose().pose;
+    moveTo(0.145, target_pose.position.y, 0.345); // bring arm backward and down
     
     magnet_msg.data = false;
-    magnet_pub.publish(magnet_msg);
-    ////////////////////////////////////////////////////
+    magnet_pub.publish(magnet_msg); // MAGNET OFF
 
     // go back to default position after finishing storing the bricks
     moveToDefault();
     magnet_msg.data = true;
-    magnet_pub.publish(magnet_msg);
+    magnet_pub.publish(magnet_msg); // MAGNET ON
 
     FLAG_MOVED = false;
     FLAG_STORED = false;
     FLAG_FINISH_PICK = false;
   };
 
+  void unload(float atX, float atY, float atZ){
+
+    magnet_msg.data = true;
+    magnet_pub.publish(magnet_msg); // MAGNET ON
+
+    moveToStorage();
+    geometry_msgs::Pose target_pose = move_group.getCurrentPose().pose;
+    target_pose = move_group.getCurrentPose().pose;
+    moveTo(0.145, target_pose.position.y, 0.342); // go to the stored brick
+    moveToFront();
+    moveTo(atX, atY, (atZ + 0.345)); //0.345 = brick height + magnetic
+
+    //MAGNET OFF
+    magnet_msg.data = false;
+    magnet_pub.publish(magnet_msg); // MAGNET OFF
+
+    moveToDefault();
+    magnet_msg.data = true;
+    magnet_pub.publish(magnet_msg); // MAGNET ON
+  }
 
 };  // end of class def
 
