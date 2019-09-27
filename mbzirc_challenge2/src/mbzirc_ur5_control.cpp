@@ -54,7 +54,7 @@
 #define DELAY 1.0         // for sleep function => robot updating states => 0.4 s fail (?)
 #define END_EFFECTOR 0.07
 #define PLANNING_TIMEOUT 20
-#define Z_OFFSET 0.04
+#define Z_OFFSET 0.05
 
 namespace rvt = rviz_visual_tools;
 
@@ -62,11 +62,10 @@ namespace rvt = rviz_visual_tools;
 tf2::Quaternion q;
 
 // FLAG for robot motion
-bool atDefaultPose = false;
-bool finishPicking = false;
-bool finishStoring = false;
-bool FLAG_MOVE = false;
-bool FLAG_STORE = false;
+bool FLAG_AT_DEFAULT = false;
+bool FLAG_MOVED = false;
+bool FLAG_FINISH_PICK = false;
+bool FLAG_STORED = false;
 
 // =============================== call back function ==================================== //
 class Arm{
@@ -116,14 +115,17 @@ public:
   }
 
   void chatterCallback1(const std_msgs::String::ConstPtr& msg) {
-    moveToDefault();
+    if (FLAG_AT_DEFAULT == false){
+      moveToDefault();
+    }
   }
 
   void pickAtCallback(const geometry_msgs::Pose::ConstPtr& msg) {
-    if (FLAG_MOVE == false){
-      moveFromCurrentState(msg->position.x, msg->position.y, msg->position.z);
+    ROS_INFO("FLAG_AT_DEFAULT = %d, ", FLAG_AT_DEFAULT);
+    if (FLAG_AT_DEFAULT == true && FLAG_MOVED == false){ // picking up should start from DEFAULT position
+      moveFromCurrentState(msg->position.x, msg->position.y, msg->position.z, true);
     }
-    if (FLAG_STORE == false){
+    if (FLAG_FINISH_PICK == true && FLAG_STORED == false){  // store only after picking bricks
       storeOnUGV();
     }
 
@@ -235,7 +237,7 @@ public:
       pose_Wall.orientation.w = q[3];
       pose_Wall.position.x =  0;
       pose_Wall.position.y =  0.32;
-      pose_Wall.position.z =  -0.10;
+      pose_Wall.position.z =  -0.04;
 
       Wall.primitives.push_back(primitive_Wall);
       Wall.primitive_poses.push_back(pose_Wall);
@@ -298,6 +300,7 @@ public:
     joint_group_positions[5] = 0;  // radians
     move_group.setJointValueTarget(joint_group_positions);
     move_group.setPlanningTime(PLANNING_TIMEOUT);
+    move_group.setMaxVelocityScalingFactor(0.1); // Cartesian motions are needed to be slower
 
     success = (move_group.plan(my_plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS);
     ROS_INFO_NAMED("tutorial", "Visualizing Initial joint plan (joint space goal) %s", success ? "" : "FAILED");
@@ -317,12 +320,12 @@ public:
     };
 
   void moveToDefault(){
+    FLAG_AT_DEFAULT = true;
     moveit::core::RobotStatePtr current_state = move_group.getCurrentState();
     //
     // Next get the current set of joint values for the group.
     std::vector<double> joint_group_positions;
     current_state->copyJointGroupPositions(joint_model_group, joint_group_positions);
-
 
       moveToFront();
 
@@ -335,7 +338,7 @@ public:
       target_pose3 = move_group.getCurrentPose().pose; // Cartesian Path from the current position
       waypoints_up.push_back(target_pose3);
 
-      target_pose3.position.z += 0.30;        // up to default position => the highest we can go ~140 cm
+      target_pose3.position.z += 0.29;        // up to default position => the highest we can go ~140 cm
       waypoints_up.push_back(target_pose3);   // back to the position before going down
 
       move_group.setMaxVelocityScalingFactor(0.1); // Cartesian motions are needed to be slower
@@ -362,13 +365,10 @@ public:
       move_group.execute(cartesian_plan);
       ros::Duration(DELAY).sleep();           // wait for robot to update current state otherwise failed
 
-
-
-
   };
 
-  void moveFromCurrentState(float toX, float toY, float toZ){
-    FLAG_MOVE = true;
+  void moveFromCurrentState(float toX, float toY, float toZ, bool isPicking){
+    FLAG_MOVED = true;
 
     geometry_msgs::Pose target_pose = move_group.getCurrentPose().pose;
     std::vector<geometry_msgs::Pose> waypoints_down;
@@ -377,7 +377,7 @@ public:
 
     target_pose.position.x += toX; //0.21; // + right
     target_pose.position.y -= toY ; //0.09; // + front
-    target_pose.position.z -= (toZ - 0.05); //0.72; // + up
+    target_pose.position.z -= (toZ - Z_OFFSET); //0.72; // + up
     waypoints_down.push_back(target_pose);    // back to the position before going down
 
     move_group.setMaxVelocityScalingFactor(0.1); // Cartesian motions are needed to be slower
@@ -406,18 +406,26 @@ public:
     move_group.execute(cartesian_plan);
     ros::Duration(DELAY).sleep();           // wait for robot to update current state otherwise failed
 
+    FLAG_AT_DEFAULT = false;
 
+    if (isPicking == true){     // to inform that robot has done picking job
+      FLAG_FINISH_PICK = true;
+    }else{
+      FLAG_FINISH_PICK = false;
+    }
   };
 
   void storeOnUGV(){
-    FLAG_STORE = true;
+    FLAG_STORED = true;
     moveit::core::RobotStatePtr current_state = move_group.getCurrentState();
     //
     // Next get the current set of joint values for the group.
     std::vector<double> joint_group_positions;
     current_state->copyJointGroupPositions(joint_model_group, joint_group_positions);
     // Now, let's modify one of the joints, plan to the new joint space goal and visualize the plan.
+    moveToFront();  // to front position
 
+    // rotate left 90 Deg to store bricks
     joint_group_positions[0] = PI;  // radians
     joint_group_positions[1] = -PI/2;  // radians
     joint_group_positions[2] = PI/2;  // radians
@@ -426,6 +434,7 @@ public:
     joint_group_positions[5] = 0;  // radians
     move_group.setJointValueTarget(joint_group_positions);
     move_group.setPlanningTime(PLANNING_TIMEOUT);
+    move_group.setMaxVelocityScalingFactor(0.1); // Cartesian motions are needed to be slower
 
     success = (move_group.plan(my_plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS);
     ROS_INFO_NAMED("tutorial", "Visualizing Initial joint plan (joint space goal) %s", success ? "" : "FAILED");
@@ -440,30 +449,26 @@ public:
     visual_tools.prompt("Press 'next' to front position");
   #endif
 
-    visual_tools.prompt("Press 'next' to front position");
+//    visual_tools.prompt("Press 'next' to front position");
     move_group.move(); //move to default position, arm in front of the robot
     ros::Duration(DELAY).sleep();           // wait for robot to update current state otherwise failed
 
     ////////////////////////////////////////////////////
     // ****************** NEED TUNING ************************
     // counting for stacking bricks case
-    moveFromCurrentState(-0.10, 0, 0);
-    moveFromCurrentState(0.00, 0, -0.20);
+    moveFromCurrentState(0.10, 0, 0, false);
+    moveFromCurrentState(0.00, 0, 0.30, false);
     ////////////////////////////////////////////////////
 
     // go back to default position after finishing storing the bricks
     moveToDefault();
-    FLAG_MOVE = false;
-    FLAG_STORE = false;
+    FLAG_MOVED = false;
+    FLAG_STORED = false;
+    FLAG_FINISH_PICK = false;
   };
 
 
 };  // end of class def
-
-
-
-
-
 
 int main(int argc, char** argv)
 {
