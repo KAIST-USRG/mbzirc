@@ -107,9 +107,11 @@ public:
     joint_model_group =
                 move_group.getCurrentState()->getJointModelGroup(PLANNING_GROUP);
     text_pose = Eigen::Isometry3d::Identity();
-    ROS_INFO("1");
 
     initWall();
+    visual_tools.prompt("Press 'next' to go Default position");
+    moveToDefault();
+
     sub1 = nh.subscribe("/chatter1", 1000, &Arm::chatterCallback1, this);
     sub2 = nh.subscribe("/pickAt", 1000, &Arm::pickAtCallback, this);
   }
@@ -121,10 +123,11 @@ public:
   }
 
   void pickAtCallback(const geometry_msgs::Pose::ConstPtr& msg) {
-    if (FLAG_AT_DEFAULT == false){
-      moveToDefault();
-    }else if(FLAG_AT_DEFAULT == true && FLAG_MOVED == false){ // picking up should start from DEFAULT position
+    if(FLAG_AT_DEFAULT == true && FLAG_MOVED == false){ // picking up should start from DEFAULT position
       ROS_INFO("x = %lf, y = %lf, z =%lf", msg->position.x, msg->position.y, msg->position.z);
+      FLAG_MOVED = true;
+      FLAG_AT_DEFAULT = false;
+      visual_tools.prompt("Press 'next' to go to get bricks");
       moveFromCurrentState(msg->position.x, msg->position.y, msg->position.z, true);
     }
 
@@ -323,7 +326,7 @@ public:
     };
 
   void moveToDefault(){
-    FLAG_AT_DEFAULT = true;
+
     moveit::core::RobotStatePtr current_state = move_group.getCurrentState();
     //
     // Next get the current set of joint values for the group.
@@ -366,12 +369,14 @@ public:
       visual_tools.prompt("Press 'next' to go to default position");
     #endif
       move_group.execute(cartesian_plan);
+      FLAG_AT_DEFAULT = true;
       ros::Duration(3).sleep(); //sleep for 2 s to wait for stable msg from camera
 
   };
 
   void moveFromCurrentState(float toX, float toY, float toZ, bool isPicking){
-    FLAG_MOVED = true;
+//    FLAG_MOVED = true;
+//    FLAG_AT_DEFAULT = false;
 
     geometry_msgs::Pose target_pose = move_group.getCurrentPose().pose;
     std::vector<geometry_msgs::Pose> waypoints_down;
@@ -408,8 +413,6 @@ public:
 
     move_group.execute(cartesian_plan);
     ros::Duration(DELAY).sleep();           // wait for robot to update current state otherwise failed
-
-    FLAG_AT_DEFAULT = false;
 
     if (isPicking == true){     // to inform that robot has done picking job
       FLAG_FINISH_PICK = true;
