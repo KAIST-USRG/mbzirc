@@ -55,7 +55,7 @@
 #define END_EFFECTOR 0.07
 #define PLANNING_TIMEOUT 20
 #define Z_OFFSET 0.03
-#define NUM_SUM 25      // to average the pose msg
+#define NUM_SUM 10      // to average the pose msg
 
 namespace rvt = rviz_visual_tools;
 
@@ -364,7 +364,7 @@ public:
       target_pose3 = move_group.getCurrentPose().pose; // Cartesian Path from the current position
       waypoints_up.push_back(target_pose3);
 
-      target_pose3.position.z += 0.29;        // up to default position => the highest we can go ~140 cm
+      target_pose3.position.z += 0.20;        // up to default position => the highest we can go ~140 cm
       waypoints_up.push_back(target_pose3);   // back to the position before going down
 
       move_group.setMaxVelocityScalingFactor(0.1); // Cartesian motions are needed to be slower
@@ -454,7 +454,7 @@ public:
     std::vector<double> joint_group_positions;
     current_state->copyJointGroupPositions(joint_model_group, joint_group_positions);
     // Now, let's modify one of the joints, plan to the new joint space goal and visualize the plan.
-//    moveToFront();  // to front position
+    moveToFront();  // to front position
 
     // rotate left 90 Deg to store bricks
     joint_group_positions[0] = PI;  // radians
