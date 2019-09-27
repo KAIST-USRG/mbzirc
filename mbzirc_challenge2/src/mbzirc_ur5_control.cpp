@@ -56,6 +56,7 @@
 #define PLANNING_TIMEOUT 20
 #define Z_OFFSET 0.03
 #define NUM_SUM 10      // to average the pose msg
+#define NUM_DISCARD = 50
 
 namespace rvt = rviz_visual_tools;
 
@@ -68,10 +69,11 @@ bool FLAG_MOVED = false;
 bool FLAG_FINISH_PICK = false;
 bool FLAG_STORED = false;
 
-int COUNT_POSE_MSG = 0;
-float X_SUM = 0;
-float Y_SUM = 0;
-float Z_SUM = 0;
+int gb_count_pose_msg = 0;
+int gb_discard_noise = 0;
+float gb_x_sum = 0;
+float gb_y_sum = 0;
+float gb_z_sum = 0;
 
 // =============================== call back function ==================================== //
 class Arm{
@@ -129,24 +131,24 @@ public:
   }
 
   void pickAtCallback(const geometry_msgs::Pose::ConstPtr& msg) {
-    if (FLAG_AT_DEFAULT == true && COUNT_POSE_MSG < NUM_SUM){
-      X_SUM += msg->position.x;
-      Y_SUM += msg->position.y;
-      Z_SUM += msg->position.z;
-      COUNT_POSE_MSG += 1;
+    if (FLAG_AT_DEFAULT == true && gb_count_pose_msg < NUM_SUM){
+      gb_x_sum += msg->position.x;
+      gb_y_sum += msg->position.y;
+      gb_z_sum += msg->position.z;
+      gb_count_pose_msg += 1;
     }else{
 
       if(FLAG_AT_DEFAULT == true && FLAG_MOVED == false){ // picking up should start from DEFAULT position
-        ROS_INFO("x = %lf, y = %lf, z =%lf", X_SUM/NUM_SUM, Y_SUM/NUM_SUM, Z_SUM/NUM_SUM);
+        ROS_INFO("x = %lf, y = %lf, z =%lf", gb_x_sum/NUM_SUM, gb_y_sum/NUM_SUM, gb_z_sum/NUM_SUM);
         FLAG_MOVED = true;
         FLAG_AT_DEFAULT = false;
         visual_tools.prompt("Press 'next' to go to get bricks");
-        moveFromCurrentState(X_SUM/NUM_SUM, Y_SUM/NUM_SUM, Z_SUM/NUM_SUM, true);
+        moveFromCurrentState(gb_x_sum/NUM_SUM, gb_y_sum/NUM_SUM, gb_z_sum/NUM_SUM, true);
 
-        COUNT_POSE_MSG = 0;
-        X_SUM = 0;
-        Y_SUM = 0;
-        Z_SUM = 0;
+        gb_count_pose_msg = 0;
+        gb_x_sum = 0;
+        gb_y_sum = 0;
+        gb_z_sum = 0;
       }
     }
 
@@ -389,7 +391,7 @@ public:
       visual_tools.prompt("Press 'next' to go to default position");
     #endif
       move_group.execute(cartesian_plan);
-      ros::Duration(2*DELAY).sleep(); //sleep for 2 s to wait for stable msg from camera
+      ros::Duration(5*DELAY).sleep(); //sleep for 2 s to wait for stable msg from camera
       FLAG_AT_DEFAULT = true;
   };
 
