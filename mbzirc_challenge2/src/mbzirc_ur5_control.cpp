@@ -121,10 +121,13 @@ public:
   }
 
   void pickAtCallback(const geometry_msgs::Pose::ConstPtr& msg) {
-    ROS_INFO("FLAG_AT_DEFAULT = %d, ", FLAG_AT_DEFAULT);
-    if (FLAG_AT_DEFAULT == true && FLAG_MOVED == false){ // picking up should start from DEFAULT position
+    if (FLAG_AT_DEFAULT == false){
+      moveToDefault();
+    }else if(FLAG_AT_DEFAULT == true && FLAG_MOVED == false){ // picking up should start from DEFAULT position
+      ROS_INFO("x = %lf, y = %lf, z =%lf", msg->position.x, msg->position.y, msg->position.z);
       moveFromCurrentState(msg->position.x, msg->position.y, msg->position.z, true);
     }
+
     if (FLAG_FINISH_PICK == true && FLAG_STORED == false){  // store only after picking bricks
       storeOnUGV();
     }
