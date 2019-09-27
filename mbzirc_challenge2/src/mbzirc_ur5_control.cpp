@@ -562,8 +562,8 @@ public:
     FLAG_FINISH_PICK = false;
   };
 
-  void unload(float atX, float atY, float atZ){
-
+  void unloadTo(float atX, float atY, float atZ){
+    // unload to absolute coordinate w.r.t. base-frame
     magnet_msg.data = true;
     magnet_pub.publish(magnet_msg); // MAGNET ON
 
