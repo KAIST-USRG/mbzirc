@@ -69,6 +69,8 @@ bool FLAG_AT_DEFAULT = false;
 bool FLAG_MOVED = false;
 bool FLAG_FINISH_PICK = false;
 bool FLAG_STORED = false;
+bool FLAG_FINISH_STORING1 = true;
+bool FLAG_FINISH_STORING2 = true;
 bool FLAG_FINISH_UNLOAD1 = true;
 bool FLAG_FINISH_UNLOAD2 = true;
 
@@ -129,17 +131,17 @@ public:
 //    visual_tools.prompt("Press 'next' to go Default position");
     moveToDefault();
 
-    sub1 = nh.subscribe("/chatter1", 1000, &Arm::chatterCallback1, this);
+//    sub1 = nh.subscribe("/chatter1", 1000, &Arm::chatterCallback1, this);
     sub2 = nh.subscribe("/pickAt", 1000, &Arm::pickAtCallback, this);
 
     magnet_pub = nh.advertise<std_msgs::Bool>("/magnet_on", 1000);
   }
 
-  void chatterCallback1(const std_msgs::String::ConstPtr& msg) {
-    if (FLAG_AT_DEFAULT == false){
-      moveToDefault();
-    }
-  }
+//  void chatterCallback1(const std_msgs::String::ConstPtr& msg) {
+//    if (FLAG_AT_DEFAULT == false){
+//      moveToDefault();
+//    }
+//  }
 
   void pickAtCallback(const geometry_msgs::Pose::ConstPtr& msg) {
     if (FLAG_AT_DEFAULT == true && gb_count_pose_msg < NUM_SUM){
@@ -153,7 +155,8 @@ public:
       gb_z_sum += msg->position.z;
       gb_count_pose_msg += 1;
     }else if(FLAG_AT_DEFAULT == true && FLAG_MOVED == false &&
-              FLAG_FINISH_UNLOAD1 == true && FLAG_FINISH_UNLOAD2 == true){ // picking up should start from DEFAULT position
+              FLAG_FINISH_UNLOAD1 == true && FLAG_FINISH_UNLOAD2 == true &&
+              FLAG_FINISH_STORING1 == true && FLAG_FINISH_STORING2 == true){ // picking up should start from DEFAULT position
         int n = NUM_SUM - NUM_DISCARD;
         ROS_INFO("x = %lf, y = %lf, z =%lf", gb_x_sum/n, gb_y_sum/n, gb_z_sum/n);
         FLAG_MOVED = true;
@@ -170,12 +173,15 @@ public:
 
 
     if (FLAG_FINISH_PICK == true && FLAG_STORED == false){  // store only after picking bricks
+      FLAG_FINISH_STORING1 = false;
       storeOnUGV(1);
+
+//      FLAG_FINISH_STORING1 = true;
 //      FLAG_FINISH_UNLOAD1 = false;
-//      FLAG_FINISH_UNLOAD2 = false;
-//      unloadTo(0,0,0, 2);
-//      FLAG_FINISH_UNLOAD2 = true;
-//      unloadTo(0,0,0, 1);
+//      FLAG_FINISH_UNLOAD2 = false;  // should set this FLAG when unloading
+//      unloadTo(0,0.30,0, 2);
+//      FLAG_FINISH_UNLOAD2 = true;   // should set this FLAG when finishing unloading
+//      unloadTo(0,0.30,0, 1);
 //      FLAG_FINISH_UNLOAD1 = true;
     }
 
@@ -370,12 +376,12 @@ public:
     };
 
   void moveToDefault(){
-
-    moveit::core::RobotStatePtr current_state = move_group.getCurrentState();
-    //
-    // Next get the current set of joint values for the group.
-    std::vector<double> joint_group_positions;
-    current_state->copyJointGroupPositions(joint_model_group, joint_group_positions);
+    if (FLAG_AT_DEFAULT == false){
+      moveit::core::RobotStatePtr current_state = move_group.getCurrentState();
+      //
+      // Next get the current set of joint values for the group.
+      std::vector<double> joint_group_positions;
+      current_state->copyJointGroupPositions(joint_model_group, joint_group_positions);
 
       moveToFront();
 
@@ -415,6 +421,8 @@ public:
       move_group.execute(cartesian_plan);
       FLAG_AT_DEFAULT = true;
       ros::Duration(5*DELAY).sleep(); //sleep for 5 s to wait for stable msg from camera
+    }
+
   };
 
   void moveFromCurrentState(float toX, float toY, float toZ, bool isPicking){
@@ -512,8 +520,8 @@ public:
   };
 
   void moveToStorage(){
+    // assume we are at default position
 
-    moveToDefault();
     moveit::core::RobotStatePtr current_state = move_group.getCurrentState();
     // Next get the current set of joint values for the group.
     std::vector<double> joint_group_positions;
@@ -552,9 +560,9 @@ public:
     geometry_msgs::Pose target_pose = move_group.getCurrentPose().pose;
     target_pose = move_group.getCurrentPose().pose;
     if (count == 1){
-      moveTo(0.145, target_pose.position.y, 0.345); // bring arm backward and down
+      moveTo(-0.35, target_pose.position.y, 0.345); // bring arm backward and down
     }else if (count == 2){
-      moveTo(0.145, target_pose.position.y, 0.345 + 22); // bring arm backward and down
+      moveTo(-0.35, target_pose.position.y, 0.345 + 22); // bring arm backward and down
     }
     
     magnet_msg.data = false;
@@ -583,9 +591,9 @@ public:
     geometry_msgs::Pose target_pose = move_group.getCurrentPose().pose;
     target_pose = move_group.getCurrentPose().pose;
     if (count == 1){
-      moveTo(0.145, target_pose.position.y, 0.342); // go to the below stored brick
+      moveTo(-0.35, target_pose.position.y, 0.342); // go to the below stored brick
     }else if(count == 2){
-      moveTo(0.145, target_pose.position.y, 0.342 + 0.20); // go to the upper stored brick
+      moveTo(-0.35, target_pose.position.y, 0.342 + 0.20); // go to the upper stored brick
     }
 
     moveToFront();
