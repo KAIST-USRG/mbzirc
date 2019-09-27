@@ -363,7 +363,7 @@ public:
       visual_tools.prompt("Press 'next' to go to default position");
     #endif
       move_group.execute(cartesian_plan);
-      ros::Duration(DELAY).sleep();           // wait for robot to update current state otherwise failed
+      ros::Duration(3).sleep(); //sleep for 2 s to wait for stable msg from camera
 
   };
 
