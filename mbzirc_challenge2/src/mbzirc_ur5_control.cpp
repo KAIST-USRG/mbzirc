@@ -55,8 +55,8 @@
 #define END_EFFECTOR 0.07
 #define PLANNING_TIMEOUT 20
 #define Z_OFFSET 0.03
-#define NUM_SUM 10      // to average the pose msg
-#define NUM_DISCARD = 50
+#define NUM_SUM 30      // to average the pose msg
+#define NUM_DISCARD 20
 
 namespace rvt = rviz_visual_tools;
 
@@ -132,6 +132,11 @@ public:
 
   void pickAtCallback(const geometry_msgs::Pose::ConstPtr& msg) {
     if (FLAG_AT_DEFAULT == true && gb_count_pose_msg < NUM_SUM){
+      if (gb_count_pose_msg <= NUM_DISCARD){
+        gb_x_sum = 0;
+        gb_y_sum = 0;
+        gb_z_sum = 0;
+      }
       gb_x_sum += msg->position.x;
       gb_y_sum += msg->position.y;
       gb_z_sum += msg->position.z;
@@ -139,11 +144,12 @@ public:
     }else{
 
       if(FLAG_AT_DEFAULT == true && FLAG_MOVED == false){ // picking up should start from DEFAULT position
-        ROS_INFO("x = %lf, y = %lf, z =%lf", gb_x_sum/NUM_SUM, gb_y_sum/NUM_SUM, gb_z_sum/NUM_SUM);
+        int n = NUM_SUM - NUM_DISCARD;
+        ROS_INFO("x = %lf, y = %lf, z =%lf", gb_x_sum/n, gb_y_sum/n, gb_z_sum/n);
         FLAG_MOVED = true;
         FLAG_AT_DEFAULT = false;
         visual_tools.prompt("Press 'next' to go to get bricks");
-        moveFromCurrentState(gb_x_sum/NUM_SUM, gb_y_sum/NUM_SUM, gb_z_sum/NUM_SUM, true);
+        moveFromCurrentState(gb_x_sum/n, gb_y_sum/n, gb_z_sum/n, true);
 
         gb_count_pose_msg = 0;
         gb_x_sum = 0;
