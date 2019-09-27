@@ -47,6 +47,7 @@
 
 #include "ros/ros.h"
 #include "std_msgs/String.h"
+#include "std_msgs/Bool.h"
 #include "geometry_msgs/Point.h"
 #include "geometry_msgs/Pose.h"
 
@@ -75,6 +76,7 @@ float gb_x_sum = 0;
 float gb_y_sum = 0;
 float gb_z_sum = 0;
 
+
 // =============================== call back function ==================================== //
 class Arm{
 private:
@@ -92,6 +94,7 @@ private:
 
   ros::Subscriber sub1;
   ros::Subscriber sub2;
+  ros::Publisher magnet_pub;
 
   ros::NodeHandle nh_;
   ros::NodeHandle nh;
@@ -103,6 +106,7 @@ private:
   moveit::core::RobotStatePtr current_state;
   const robot_state::JointModelGroup* joint_model_group;
   Eigen::Isometry3d text_pose;
+  std_msgs::Bool magnet_msg;
 
 public:
 
@@ -111,6 +115,8 @@ public:
     std::string PLANNING_GROUP = "manipulator";
     moveit::planning_interface::MoveGroupInterface move_group(PLANNING_GROUP);
     current_state = move_group.getCurrentState();
+
+    magnet_msg.data = true;
 
     joint_model_group =
                 move_group.getCurrentState()->getJointModelGroup(PLANNING_GROUP);
@@ -122,6 +128,8 @@ public:
 
     sub1 = nh.subscribe("/chatter1", 1000, &Arm::chatterCallback1, this);
     sub2 = nh.subscribe("/pickAt", 1000, &Arm::pickAtCallback, this);
+
+    magnet_pub = nh.advertise<std_msgs::Bool>("/magnet_on", 1000);
   }
 
   void chatterCallback1(const std_msgs::String::ConstPtr& msg) {
@@ -496,11 +504,17 @@ public:
     // ****************** NEED TUNING ************************
     // counting for stacking bricks case
     moveFromCurrentState(0.10, 0, 0, false);
-    moveFromCurrentState(0.00, 0, 0.30, false);
+    moveFromCurrentState(0.00, 0, 0.20, false);
+    
+    magnet_msg.data = false;
+    magnet_pub.publish(magnet_msg);
     ////////////////////////////////////////////////////
 
     // go back to default position after finishing storing the bricks
     moveToDefault();
+    magnet_msg.data = true;
+    magnet_pub.publish(magnet_msg);
+
     FLAG_MOVED = false;
     FLAG_STORED = false;
     FLAG_FINISH_PICK = false;
