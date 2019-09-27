@@ -364,7 +364,7 @@ public:
       target_pose3 = move_group.getCurrentPose().pose; // Cartesian Path from the current position
       waypoints_up.push_back(target_pose3);
 
-      target_pose3.position.z += 0.20;        // up to default position => the highest we can go ~140 cm
+      target_pose3.position.z += 0.28;        // up to default position => the highest we can go ~140 cm
       waypoints_up.push_back(target_pose3);   // back to the position before going down
 
       move_group.setMaxVelocityScalingFactor(0.1); // Cartesian motions are needed to be slower
