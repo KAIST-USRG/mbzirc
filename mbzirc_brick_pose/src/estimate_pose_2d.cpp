@@ -728,7 +728,7 @@ public:
       // if (x>=x_LT && x<=x_LT+width && y>=y_LT && y<=y_LT+height)
       if (y>=0 && y<img_height && x >=0 && x<img_width)
       {
-        if (mask.at<uchar>(y,x)==255)
+        if (detected_HS.at<uchar>(y,x)==255)
           filtered_cloud->points.push_back(depth_points.points[i]);
       }
       
