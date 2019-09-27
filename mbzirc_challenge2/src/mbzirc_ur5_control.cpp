@@ -55,7 +55,7 @@
 #define END_EFFECTOR 0.07
 #define PLANNING_TIMEOUT 20
 #define Z_OFFSET 0.03
-#define NUM_SUM 10      // to average the pose msg
+#define NUM_SUM 25      // to average the pose msg
 
 namespace rvt = rviz_visual_tools;
 
@@ -389,9 +389,8 @@ public:
       visual_tools.prompt("Press 'next' to go to default position");
     #endif
       move_group.execute(cartesian_plan);
-      FLAG_AT_DEFAULT = true;
       ros::Duration(2*DELAY).sleep(); //sleep for 2 s to wait for stable msg from camera
-
+      FLAG_AT_DEFAULT = true;
   };
 
   void moveFromCurrentState(float toX, float toY, float toZ, bool isPicking){
@@ -455,7 +454,7 @@ public:
     std::vector<double> joint_group_positions;
     current_state->copyJointGroupPositions(joint_model_group, joint_group_positions);
     // Now, let's modify one of the joints, plan to the new joint space goal and visualize the plan.
-    moveToFront();  // to front position
+//    moveToFront();  // to front position
 
     // rotate left 90 Deg to store bricks
     joint_group_positions[0] = PI;  // radians
