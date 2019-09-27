@@ -170,6 +170,7 @@ public:
 
     if (FLAG_FINISH_PICK == true && FLAG_STORED == false){  // store only after picking bricks
       storeOnUGV();
+      unloadTo(0,0,0);
     }
 
   }
@@ -574,7 +575,7 @@ public:
     moveToFront();
     moveTo(atX, atY, (atZ + 0.345)); //0.345 = brick height + magnetic
 
-    //MAGNET OFF
+
     magnet_msg.data = false;
     magnet_pub.publish(magnet_msg); // MAGNET OFF
 
