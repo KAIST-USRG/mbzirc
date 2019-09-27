@@ -31,3 +31,12 @@
 
 ## To run brick pose estimation
 `roslaunch mbzirc_brick_pose estimate_pose_2d.launch`
+
+## To use magnetic control
+1. find port name of adruino
+`ls /dev/ttyA*`
+2. If the portname is "ttyACM0" type in this command
+`sudo chmod 777 /dev/ttyACM0`
+3. Publish /magnet_on topic (Bool msg)
+  true = magnet ON
+  false = magnet OFF
