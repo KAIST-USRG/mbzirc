@@ -913,7 +913,7 @@ public:
       // block_pose_pub.publish(block_pose);
 
       geometry_msgs::Pose block_pose;
-      block_pose.position.x = center.x, block_pose.position.y = center.y, block_pose.position.z = center.z;
+      block_pose.position.x = center.x, block_pose.position.y = -center.y, block_pose.position.z = -center.z;
       tf::Matrix3x3 obs_mat;
       tf::Quaternion q_tf;
 
@@ -1138,7 +1138,7 @@ public:
         // block_pose_pub.publish(block_pose);
 
         geometry_msgs::Pose block_pose;
-        block_pose.position.x = center.x, block_pose.position.y = center.y, block_pose.position.z = center.z;
+        block_pose.position.x = center.x, block_pose.position.y = -center.y, block_pose.position.z = -center.z;
         tf::Matrix3x3 obs_mat;
         tf::Quaternion q_tf;
 
@@ -1396,7 +1396,7 @@ public:
           // block_pose_pub.publish(block_pose);
 
           geometry_msgs::Pose block_pose;
-          block_pose.position.x = centroid.x, block_pose.position.y = centroid.y, block_pose.position.z = centroid.z;
+          block_pose.position.x = centroid.x, block_pose.position.y = -centroid.y, block_pose.position.z = -centroid.z;
           tf::Matrix3x3 obs_mat;
           tf::Quaternion q_tf;
 

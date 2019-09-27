@@ -55,9 +55,9 @@
 #define DELAY 1.0         // for sleep function => robot updating states => 0.4 s fail (?)
 #define END_EFFECTOR 0.07
 #define PLANNING_TIMEOUT 20
-#define Z_OFFSET 0.03
-#define NUM_SUM 30      // to average the pose msg
-#define NUM_DISCARD 20
+#define Z_OFFSET 0.105
+#define NUM_SUM 20      // to average the pose msg
+#define NUM_DISCARD 10
 
 namespace rvt = rviz_visual_tools;
 
@@ -94,12 +94,13 @@ private:
 
   ros::Subscriber sub1;
   ros::Subscriber sub2;
+  ros::Subscriber sub3;
   ros::Publisher magnet_pub;
 
   ros::NodeHandle nh_;
   ros::NodeHandle nh;
 
-
+;
   moveit::planning_interface::MoveGroupInterface move_group;
 
   moveit_visual_tools::MoveItVisualTools visual_tools;
@@ -418,15 +419,17 @@ public:
     target_pose = move_group.getCurrentPose().pose; // Cartesian Path from the current position
     waypoints_down.push_back(target_pose);
 
-    target_pose.position.x += toX; //0.21; // + right
-    target_pose.position.y -= toY ; //0.09; // + front
     if (isPicking == true){
-      target_pose.position.z -= (toZ - Z_OFFSET); //0.72; // + up
+      target_pose.position.x += (toX);
+      target_pose.position.y += (toY + 0.05);
+      target_pose.position.z += (toZ + 0.105); //0.72; // + up
+      waypoints_down.push_back(target_pose);    // back to the position before going down
     }else{
-      target_pose.position.z -= toZ; // + up
+      target_pose.position.x += toX; // + right
+      // target_pose.position.y = toY; // + front
+      target_pose.position.z = toZ; // + up
+      waypoints_down.push_back(target_pose);    // back to the position before going down
     }
-
-    waypoints_down.push_back(target_pose);    // back to the position before going down
 
     move_group.setMaxVelocityScalingFactor(0.1); // Cartesian motions are needed to be slower
 
@@ -503,8 +506,8 @@ public:
     ////////////////////////////////////////////////////
     // ****************** NEED TUNING ************************
     // counting for stacking bricks case
-    moveFromCurrentState(0.10, 0, 0, false);
-    moveFromCurrentState(0.00, 0, 0.20, false);
+    // moveFromCurrentState(0.10, 0, 0, false);
+    moveFromCurrentState(0.145, 0, 0.345, false);
     
     magnet_msg.data = false;
     magnet_pub.publish(magnet_msg);
