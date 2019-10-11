@@ -1,39 +1,3 @@
-/*********************************************************************
- * Software License Agreement (BSD License)
- *
- *  Copyright (c) 2013, SRI International
- *  All rights reserved.
- *
- *  Redistribution and use in source and binary forms, with or without
- *  modification, are permitted provided that the following conditions
- *  are met:
- *
- *   * Redistributions of source code must retain the above copyright
- *     notice, this list of conditions and the following disclaimer.
- *   * Redistributions in binary form must reproduce the above
- *     copyright notice, this list of conditions and the following
- *     disclaimer in the documentation and/or other materials provided
- *     with the distribution.
- *   * Neither the name of SRI International nor the names of its
- *     contributors may be used to endorse or promote products derived
- *     from this software without specific prior written permission.
- *
- *  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
- *  "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
- *  LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
- *  FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
- *  COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
- *  INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
- *  BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
- *  LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
- *  CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
- *  LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
- *  ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- *  POSSIBILITY OF SUCH DAMAGE.
- *********************************************************************/
-
-/* Author: Sachin Chitta, Dave Coleman, Mike Lautman */
-
 #include <moveit/move_group_interface/move_group_interface.h>
 #include <moveit/planning_scene_interface/planning_scene_interface.h>
 
@@ -48,6 +12,7 @@
 #include "ros/ros.h"
 #include "std_msgs/String.h"
 #include "std_msgs/Bool.h"
+#include "std_msgs/UInt32.h"
 #include "geometry_msgs/Point.h"
 #include "geometry_msgs/Pose.h"
 
@@ -65,17 +30,21 @@ namespace rvt = rviz_visual_tools;
 tf2::Quaternion q;
 
 // FLAG for robot motion
-bool FLAG_AT_DEFAULT = false;
-bool FLAG_MOVED = false;
-bool FLAG_FINISH_PICK = false;
-bool FLAG_STORED = false;
-bool FLAG_FINISH_STORING1 = true;
-bool FLAG_FINISH_STORING2 = true;
-bool FLAG_FINISH_UNLOAD1 = true;
-bool FLAG_FINISH_UNLOAD2 = true;
+bool FLAG_AT_DEFAULT = false;   // Is the arm at default position?
+bool FLAG_MOVED = false;        // Is the arm moving in some function?
+bool FLAG_FINISH_PICK = false;  // Has the arm finished picking the brick? (brick attaches to magnet)
+bool FLAG_STORED = false;       // Is the brick already stored in on the UGV?
+
+bool FLAG_FINISH_STORING1 = true; // Is the arm storing the first object?
+bool FLAG_FINISH_STORING2 = true; // Is the arm storing the second object?
+bool FLAG_FINISH_UNLOAD = true;  // Is the arm unloading the object?
+
+bool FLAG_READ_CAM_DATA = false;    // Should the arm read msg from camera?
+
 
 int gb_count_pose_msg = 0;
 int gb_discard_noise = 0;
+int gb_count_box = 0;
 float gb_x_sum = 0;
 float gb_y_sum = 0;
 float gb_z_sum = 0;
@@ -96,22 +65,30 @@ private:
   double PI = 3.141592653589793;
   double fraction;
 
-  ros::Subscriber sub1;
-  ros::Subscriber sub2;
-  ros::Subscriber sub3;
+  ros::Subscriber pose_msg_from_cam;
+  ros::Subscriber pick_brick;
+  ros::Subscriber store_brick;
+  ros::Subscriber unload_brick;
+
   ros::Publisher magnet_pub;
+  ros::Publisher pick_brick_pub;
+  ros::Publisher store_brick_pub;
+  ros::Publisher unload_brick_pub;
 
   ros::NodeHandle nh_;
   ros::NodeHandle nh;
 
-;
   moveit::planning_interface::MoveGroupInterface move_group;
 
   moveit_visual_tools::MoveItVisualTools visual_tools;
   moveit::core::RobotStatePtr current_state;
   const robot_state::JointModelGroup* joint_model_group;
   Eigen::Isometry3d text_pose;
+
   std_msgs::Bool magnet_msg;
+  std_msgs::Bool pick_brick_msg;
+  std_msgs::UInt32 store_brick_msg;
+  geometry_msgs::Pose unload_brick_msg;
 
 public:
 
@@ -122,69 +99,95 @@ public:
     current_state = move_group.getCurrentState();
 
     magnet_msg.data = true;
+    pick_brick_msg.data = true;
 
     joint_model_group =
                 move_group.getCurrentState()->getJointModelGroup(PLANNING_GROUP);
     text_pose = Eigen::Isometry3d::Identity();
 
     initWall();
-//    visual_tools.prompt("Press 'next' to go Default position");
-    moveToDefault();
-
-//    sub1 = nh.subscribe("/chatter1", 1000, &Arm::chatterCallback1, this);
-    sub2 = nh.subscribe("/pickAt", 1000, &Arm::pickAtCallback, this);
+    moveToDefault(true);  // Start at the default position
 
     magnet_pub = nh.advertise<std_msgs::Bool>("/magnet_on", 1000);
+    pick_brick_pub = nh.advertise<std_msgs::Bool>("/pick_brick", 1000);
+    store_brick_pub = nh.advertise<std_msgs::UInt32>("/store_brick", 1000);
+
+    pose_msg_from_cam = nh.subscribe("/pickAt", 1000, &Arm::pickAtCallback, this);
+    pick_brick = nh.subscribe("/pick_brick", 1000, &Arm::pickBrickCallBack, this);
+    store_brick = nh.subscribe("/store_brick", 1000, &Arm::storeBrickCallBack, this);
+    unload_brick = nh.subscribe("/unload_brick", 1000, &Arm::unLoadCallBack, this);
   }
 
-//  void chatterCallback1(const std_msgs::String::ConstPtr& msg) {
-//    if (FLAG_AT_DEFAULT == false){
-//      moveToDefault();
-//    }
-//  }
+  void pickBrickCallBack(const std_msgs::Bool::ConstPtr& msg){
+    // trigger the arm to start reading pose of the bricks from the camera
+    if (msg->data == true){
+      FLAG_READ_CAM_DATA = true;
+    }
+    else if (msg->data == false){
+      FLAG_READ_CAM_DATA = false;
+    }
+  }
 
-  void pickAtCallback(const geometry_msgs::Pose::ConstPtr& msg) {
-    if (FLAG_AT_DEFAULT == true && gb_count_pose_msg < NUM_SUM){
-      if (gb_count_pose_msg <= NUM_DISCARD){
-        gb_x_sum = 0;
-        gb_y_sum = 0;
-        gb_z_sum = 0;
-      }
-      gb_x_sum += msg->position.x;
-      gb_y_sum += msg->position.y;
-      gb_z_sum += msg->position.z;
-      gb_count_pose_msg += 1;
-    }else if(FLAG_AT_DEFAULT == true && FLAG_MOVED == false &&
-              FLAG_FINISH_UNLOAD1 == true && FLAG_FINISH_UNLOAD2 == true &&
-              FLAG_FINISH_STORING1 == true && FLAG_FINISH_STORING2 == true){ // picking up should start from DEFAULT position
+  void pickAtCallback(const geometry_msgs::Pose::ConstPtr& msg){
+    // read the brick pose from the camera
+    // then go and get it
+    if (FLAG_READ_CAM_DATA == true){
+      if (FLAG_AT_DEFAULT == true && gb_count_pose_msg < NUM_SUM && FLAG_MOVED == false){
+        if (gb_count_pose_msg <= NUM_DISCARD){
+          gb_x_sum = 0;
+          gb_y_sum = 0;
+          gb_z_sum = 0;
+        }
+        ROS_INFO("accum the data");
+        gb_x_sum += msg->position.x;
+        gb_y_sum += msg->position.y;
+        gb_z_sum += msg->position.z;
+        gb_count_pose_msg += 1;
+      }else if(FLAG_AT_DEFAULT == true && FLAG_MOVED == false &&
+                FLAG_FINISH_UNLOAD == true && FLAG_FINISH_STORING1 == true &&
+                FLAG_FINISH_STORING2 == true){ // picking up should start from DEFAULT position
         int n = NUM_SUM - NUM_DISCARD;
         ROS_INFO("x = %lf, y = %lf, z =%lf", gb_x_sum/n, gb_y_sum/n, gb_z_sum/n);
-        FLAG_MOVED = true;
         FLAG_AT_DEFAULT = false;
         visual_tools.prompt("Press 'next' to go to get bricks");
         moveFromCurrentState(gb_x_sum/n, gb_y_sum/n, gb_z_sum/n, true);
+        gb_count_box += 1;
 
         gb_count_pose_msg = 0;
         gb_x_sum = 0;
         gb_y_sum = 0;
         gb_z_sum = 0;
 
+        store_brick_msg.data = gb_count_box;
+        store_brick_pub.publish(store_brick_msg); // store the brick on UGV
+
+      }
+    }else{
+      // don't get the stream data from camera and clear garbage data
+      gb_count_pose_msg = 0;
+      gb_x_sum = 0;
+      gb_y_sum = 0;
+      gb_z_sum = 0;
     }
+  }
 
+  void storeBrickCallBack(const std_msgs::UInt32::ConstPtr& msg){
+      // store the brick on UGV
+      pick_brick_msg.data = false;
+      pick_brick_pub.publish(pick_brick_msg); // Stop reading camera msg until we turn it on again
 
-    if (FLAG_FINISH_PICK == true && FLAG_STORED == false){  // store only after picking bricks
-      FLAG_FINISH_STORING1 = false;
-      storeOnUGV(1);
+      ROS_INFO("StoreBrickCallBack");
+      storeOnUGV(msg->data);
+  }
 
-//      FLAG_FINISH_STORING1 = true;
-//      FLAG_FINISH_UNLOAD1 = false;
-//      FLAG_FINISH_UNLOAD2 = false;  // should set this FLAG when unloading
-//      unloadTo(0,0.30,0, 2);
-//      FLAG_FINISH_UNLOAD2 = true;   // should set this FLAG when finishing unloading
-//      unloadTo(0,0.30,0, 1);
-//      FLAG_FINISH_UNLOAD1 = true;
-    }
-
+  void unLoadCallBack(const geometry_msgs::Pose::ConstPtr& msg){
+      // unLoad the box according to
+      if (FLAG_FINISH_UNLOAD == true && FLAG_MOVED == false){
+          FLAG_FINISH_UNLOAD = false;  // should set this FLAG when unloading
+          unloadTo(msg->position.x,msg->position.y,msg->position.z, gb_count_box);
+          gb_count_box -= 1;
+          FLAG_FINISH_UNLOAD = true;   // should set this FLAG when finishing unloading
+      }
   }
 
   void initWall() {
@@ -339,15 +342,14 @@ public:
   }
 
 
-
   void moveToFront(){
+    FLAG_MOVED = true;
     moveit::core::RobotStatePtr current_state = move_group.getCurrentState();
     //
     // Next get the current set of joint values for the group.
     std::vector<double> joint_group_positions;
     current_state->copyJointGroupPositions(joint_model_group, joint_group_positions);
-    // Now, let's modify one of the joints, plan to the new joint space goal and visualize the plan.
-    // =========== =========== =========== =========== =========== =========== =========== =========== =========== =========== ===========
+
     joint_group_positions[0] = PI/2;  // radians
     joint_group_positions[1] = -PI/2;  // radians
     joint_group_positions[2] = PI/2;  // radians
@@ -356,7 +358,7 @@ public:
     joint_group_positions[5] = 0;  // radians
     move_group.setJointValueTarget(joint_group_positions);
     move_group.setPlanningTime(PLANNING_TIMEOUT);
-    move_group.setMaxVelocityScalingFactor(0.1); // Cartesian motions are needed to be slower
+    move_group.setMaxVelocityScalingFactor(0.3);
 
     success = (move_group.plan(my_plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS);
     ROS_INFO_NAMED("tutorial", "Visualizing Initial joint plan (joint space goal) %s", success ? "" : "FAILED");
@@ -371,12 +373,14 @@ public:
     visual_tools.prompt("Press 'next' to front position");
   #endif
 
-    move_group.move(); //move to default position, arm in front of the robot
+    move_group.move();                      // move to default position, arm in front of the robot
     ros::Duration(DELAY).sleep();           // wait for robot to update current state otherwise failed
+    FLAG_MOVED = false;
     };
 
-  void moveToDefault(){
+  void moveToDefault(bool setFlag){
     if (FLAG_AT_DEFAULT == false){
+      FLAG_MOVED = true;
       moveit::core::RobotStatePtr current_state = move_group.getCurrentState();
       //
       // Next get the current set of joint values for the group.
@@ -419,23 +423,29 @@ public:
       visual_tools.prompt("Press 'next' to go to default position");
     #endif
       move_group.execute(cartesian_plan);
-      FLAG_AT_DEFAULT = true;
-      ros::Duration(5*DELAY).sleep(); //sleep for 5 s to wait for stable msg from camera
+      if (setFlag == true){
+        FLAG_AT_DEFAULT = true;
+      }
+      ros::Duration(3*DELAY).sleep(); //sleep to wait for stable msg from camera
+      FLAG_MOVED = false;
+    }else{
+      // do nothing if it's already at the default position
+      ROS_INFO("moveToDefault: already at the default position");
     }
 
   };
 
   void moveFromCurrentState(float toX, float toY, float toZ, bool isPicking){
-
+    FLAG_MOVED = true;
     geometry_msgs::Pose target_pose = move_group.getCurrentPose().pose;
     std::vector<geometry_msgs::Pose> waypoints_down;
     target_pose = move_group.getCurrentPose().pose; // Cartesian Path from the current position
     waypoints_down.push_back(target_pose);
 
     if (isPicking == true){
-      target_pose.position.x += (toX);
-      target_pose.position.y += (toY + 0.05);
-      target_pose.position.z += (toZ + 0.105); //0.72; // + up
+      target_pose.position.x += (toX);                  // #######################################################################################################
+      target_pose.position.y += (toY + 0.05);           // #######################################################################################################
+      target_pose.position.z += (toZ + 0.105); // + up  // #######################################################################################################
       waypoints_down.push_back(target_pose);    // back to the position before going down
     }else{
       target_pose.position.x += toX; // + right
@@ -476,10 +486,11 @@ public:
     }else{
       FLAG_FINISH_PICK = false;
     }
+    FLAG_MOVED = false;
   };
 
   void moveTo(float toX, float toY, float toZ){
-
+    FLAG_MOVED = true;
     geometry_msgs::Pose target_pose = move_group.getCurrentPose().pose;
     std::vector<geometry_msgs::Pose> waypoints_To;
     target_pose = move_group.getCurrentPose().pose; // Cartesian Path from the current position
@@ -515,13 +526,14 @@ public:
   #endif
 
     move_group.execute(cartesian_plan);
-    ros::Duration(DELAY).sleep();           // wait for robot to update current state otherwise failed
-
+    ros::Duration(2*DELAY).sleep();           // wait for robot to update current state otherwise failed
+    FLAG_MOVED = false;
   };
 
   void moveToStorage(){
+    FLAG_MOVED = true;
+    moveToDefault(false);
     // assume we are at default position
-
     moveit::core::RobotStatePtr current_state = move_group.getCurrentState();
     // Next get the current set of joint values for the group.
     std::vector<double> joint_group_positions;
@@ -547,42 +559,45 @@ public:
     #endif
 
     move_group.move(); //move to storage on left side
-    ros::Duration(DELAY).sleep();           // wait for robot to update current state otherwise failed
+    ros::Duration(2*DELAY).sleep();           // wait for robot to update current state otherwise failed
 
+    FLAG_MOVED = false;
 
   };
 
   void storeOnUGV(int count){
     ROS_INFO("Storing: count = %d", count);
+    FLAG_MOVED = true;
     FLAG_STORED = true;
     moveToStorage();
 
     geometry_msgs::Pose target_pose = move_group.getCurrentPose().pose;
     target_pose = move_group.getCurrentPose().pose;
     if (count == 1){
-      moveTo(-0.35, target_pose.position.y, 0.345); // bring arm backward and down
+      moveTo(-0.35, target_pose.position.y, 0.345); // bring arm backward and down      // #######################################################################################################
     }else if (count == 2){
-      moveTo(-0.35, target_pose.position.y, 0.345 + 22); // bring arm backward and down
+      moveTo(-0.35, target_pose.position.y, 0.345 + 22); // bring arm backward and down // #######################################################################################################
     }
     
     magnet_msg.data = false;
     magnet_pub.publish(magnet_msg); // MAGNET OFF
-
+    ROS_INFO("MAGNET_OFF");
     // go back to default position after finishing storing the bricks
-    moveToDefault();
-
+    moveToDefault(true);
 
     magnet_msg.data = true;
     magnet_pub.publish(magnet_msg); // MAGNET ON
+    ROS_INFO("MAGNET_ON");
 
-    FLAG_MOVED = false;
     FLAG_STORED = false;
     FLAG_FINISH_PICK = false;
-
+    FLAG_MOVED = false;
   };
 
   void unloadTo(float atX, float atY, float atZ, int count){
-    ROS_INFO("unloadTo: count = %d", count);
+    ROS_INFO("unloadTo");
+    FLAG_MOVED = true;
+
     // unload to absolute coordinate w.r.t. base-frame
     magnet_msg.data = true;
     magnet_pub.publish(magnet_msg); // MAGNET ON
@@ -593,23 +608,26 @@ public:
 
     // picking up from storage
     if (count == 1){
-      moveTo(-0.35, target_pose.position.y, 0.342); // go to the below stored brick
+      moveTo(-0.35, target_pose.position.y, 0.342 + 0.05); // #######################################################################################################
     }else if(count == 2){
-      moveTo(-0.35, target_pose.position.y, 0.342 + 0.20); // go to the upper stored brick
+      moveTo(-0.35, target_pose.position.y, 0.342 + 0.20); // #######################################################################################################
     }
 
     // placing down at X, Y, Z w.r.t. to base-frame
     moveToFront();
-    moveTo(atX, atY, (atZ + 0.345)); //0.345 = brick height + magnetic
-
+    moveTo(atX, atY, (atZ + 0.345)); //0.345 = brick height + magnetic // #######################################################################################################
+    ROS_INFO("unloadTo: Move to predefine position");
 
     magnet_msg.data = false;
     magnet_pub.publish(magnet_msg); // MAGNET OFF
 
     // go back to default position
-    moveToDefault();
+    moveToDefault(true);
+    ROS_INFO("unloadTo: Move to Default");
     magnet_msg.data = true;
     magnet_pub.publish(magnet_msg); // MAGNET ON
+    FLAG_MOVED = false;
+
   }
 
 };  // end of class def
