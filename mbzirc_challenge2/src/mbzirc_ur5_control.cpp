@@ -31,7 +31,7 @@ tf2::Quaternion q;
 
 // FLAG for robot motion
 bool FLAG_AT_DEFAULT = false;   // Is the arm at default position?
-bool FLAG_MOVED = false;        // Is the arm moving in some function?
+
 bool FLAG_FINISH_PICK = false;  // Has the arm finished picking the brick? (brick attaches to magnet)
 bool FLAG_STORED = false;       // Is the brick already stored in on the UGV?
 
@@ -40,6 +40,7 @@ bool FLAG_FINISH_STORING2 = true; // Is the arm storing the second object?
 bool FLAG_FINISH_UNLOAD = true;  // Is the arm unloading the object?
 
 bool FLAG_READ_CAM_DATA = false;    // Should the arm read msg from camera?
+bool FLAG_MAGNET_ON = true;      // Is the magnet on?
 
 
 int gb_count_pose_msg = 0;
@@ -69,6 +70,7 @@ private:
   ros::Subscriber pick_brick;
   ros::Subscriber store_brick;
   ros::Subscriber unload_brick;
+  ros::Subscriber magnet_state;
 
   ros::Publisher magnet_pub;
   ros::Publisher pick_brick_pub;
@@ -88,7 +90,7 @@ private:
   std_msgs::Bool magnet_msg;
   std_msgs::Bool pick_brick_msg;
   std_msgs::UInt32 store_brick_msg;
-  geometry_msgs::Pose unload_brick_msg;
+  geometry_msgs::Pose unload_brick_msg; // absolute position w.r.t UR5 base
 
 public:
 
@@ -112,10 +114,21 @@ public:
     pick_brick_pub = nh.advertise<std_msgs::Bool>("/pick_brick", 1000);
     store_brick_pub = nh.advertise<std_msgs::UInt32>("/store_brick", 1000);
 
-    pose_msg_from_cam = nh.subscribe("/pickAt", 1000, &Arm::pickAtCallback, this);
+    magnet_state = nh.subscribe("/magnet_on", 1000, &Arm::magnetStateCallBack, this);
     pick_brick = nh.subscribe("/pick_brick", 1000, &Arm::pickBrickCallBack, this);
+    pose_msg_from_cam = nh.subscribe("/pickAt", 1000, &Arm::pickAtCallback, this);
     store_brick = nh.subscribe("/store_brick", 1000, &Arm::storeBrickCallBack, this);
     unload_brick = nh.subscribe("/unload_brick", 1000, &Arm::unLoadCallBack, this);
+  }
+
+  void magnetStateCallBack(const std_msgs::Bool::ConstPtr& msg){
+    // keep track of the magnet state => allows arm to read data only when the magnet is on
+    if (msg->data == true){
+      FLAG_MAGNET_ON = true;
+    }
+    else if (msg->data == false){
+      FLAG_MAGNET_ON = false;
+    }
   }
 
   void pickBrickCallBack(const std_msgs::Bool::ConstPtr& msg){
@@ -131,8 +144,8 @@ public:
   void pickAtCallback(const geometry_msgs::Pose::ConstPtr& msg){
     // read the brick pose from the camera
     // then go and get it
-    if (FLAG_READ_CAM_DATA == true){
-      if (FLAG_AT_DEFAULT == true && gb_count_pose_msg < NUM_SUM && FLAG_MOVED == false){
+    if (FLAG_READ_CAM_DATA == true && FLAG_MAGNET_ON == true){
+      if (FLAG_AT_DEFAULT == true && gb_count_pose_msg < NUM_SUM){
         if (gb_count_pose_msg <= NUM_DISCARD){
           gb_x_sum = 0;
           gb_y_sum = 0;
@@ -143,7 +156,7 @@ public:
         gb_y_sum += msg->position.y;
         gb_z_sum += msg->position.z;
         gb_count_pose_msg += 1;
-      }else if(FLAG_AT_DEFAULT == true && FLAG_MOVED == false &&
+      }else if(FLAG_AT_DEFAULT == true &&
                 FLAG_FINISH_UNLOAD == true && FLAG_FINISH_STORING1 == true &&
                 FLAG_FINISH_STORING2 == true){ // picking up should start from DEFAULT position
         int n = NUM_SUM - NUM_DISCARD;
@@ -158,6 +171,7 @@ public:
         gb_y_sum = 0;
         gb_z_sum = 0;
 
+        // finish picking up => call the store
         store_brick_msg.data = gb_count_box;
         store_brick_pub.publish(store_brick_msg); // store the brick on UGV
 
@@ -182,7 +196,7 @@ public:
 
   void unLoadCallBack(const geometry_msgs::Pose::ConstPtr& msg){
       // unLoad the box according to
-      if (FLAG_FINISH_UNLOAD == true && FLAG_MOVED == false){
+      if (FLAG_FINISH_UNLOAD == true){
           FLAG_FINISH_UNLOAD = false;  // should set this FLAG when unloading
           unloadTo(msg->position.x,msg->position.y,msg->position.z, gb_count_box);
           gb_count_box -= 1;
@@ -341,9 +355,8 @@ public:
       move_group.attachObject(magnet_panel.id); // attach the magnet panel to end-effector
   }
 
-
   void moveToFront(){
-    FLAG_MOVED = true;
+
     moveit::core::RobotStatePtr current_state = move_group.getCurrentState();
     //
     // Next get the current set of joint values for the group.
@@ -375,12 +388,12 @@ public:
 
     move_group.move();                      // move to default position, arm in front of the robot
     ros::Duration(DELAY).sleep();           // wait for robot to update current state otherwise failed
-    FLAG_MOVED = false;
+
+    FLAG_AT_DEFAULT = false;
     };
 
   void moveToDefault(bool setFlag){
     if (FLAG_AT_DEFAULT == false){
-      FLAG_MOVED = true;
       moveit::core::RobotStatePtr current_state = move_group.getCurrentState();
       //
       // Next get the current set of joint values for the group.
@@ -427,7 +440,7 @@ public:
         FLAG_AT_DEFAULT = true;
       }
       ros::Duration(3*DELAY).sleep(); //sleep to wait for stable msg from camera
-      FLAG_MOVED = false;
+
     }else{
       // do nothing if it's already at the default position
       ROS_INFO("moveToDefault: already at the default position");
@@ -436,7 +449,7 @@ public:
   };
 
   void moveFromCurrentState(float toX, float toY, float toZ, bool isPicking){
-    FLAG_MOVED = true;
+
     geometry_msgs::Pose target_pose = move_group.getCurrentPose().pose;
     std::vector<geometry_msgs::Pose> waypoints_down;
     target_pose = move_group.getCurrentPose().pose; // Cartesian Path from the current position
@@ -486,11 +499,12 @@ public:
     }else{
       FLAG_FINISH_PICK = false;
     }
-    FLAG_MOVED = false;
+
+    FLAG_AT_DEFAULT = false;
   };
 
   void moveTo(float toX, float toY, float toZ){
-    FLAG_MOVED = true;
+
     geometry_msgs::Pose target_pose = move_group.getCurrentPose().pose;
     std::vector<geometry_msgs::Pose> waypoints_To;
     target_pose = move_group.getCurrentPose().pose; // Cartesian Path from the current position
@@ -527,11 +541,12 @@ public:
 
     move_group.execute(cartesian_plan);
     ros::Duration(2*DELAY).sleep();           // wait for robot to update current state otherwise failed
-    FLAG_MOVED = false;
+
+    FLAG_AT_DEFAULT = false;
   };
 
   void moveToStorage(){
-    FLAG_MOVED = true;
+
     moveToDefault(false);
     // assume we are at default position
     moveit::core::RobotStatePtr current_state = move_group.getCurrentState();
@@ -561,13 +576,12 @@ public:
     move_group.move(); //move to storage on left side
     ros::Duration(2*DELAY).sleep();           // wait for robot to update current state otherwise failed
 
-    FLAG_MOVED = false;
 
+    FLAG_AT_DEFAULT = false;
   };
 
   void storeOnUGV(int count){
     ROS_INFO("Storing: count = %d", count);
-    FLAG_MOVED = true;
     FLAG_STORED = true;
     moveToStorage();
 
@@ -576,7 +590,7 @@ public:
     if (count == 1){
       moveTo(-0.35, target_pose.position.y, 0.345); // bring arm backward and down      // #######################################################################################################
     }else if (count == 2){
-      moveTo(-0.35, target_pose.position.y, 0.345 + 22); // bring arm backward and down // #######################################################################################################
+      moveTo(-0.35, target_pose.position.y, 0.345 + 0.22); // bring arm backward and down // #######################################################################################################
     }
     
     magnet_msg.data = false;
@@ -591,12 +605,10 @@ public:
 
     FLAG_STORED = false;
     FLAG_FINISH_PICK = false;
-    FLAG_MOVED = false;
   };
 
   void unloadTo(float atX, float atY, float atZ, int count){
     ROS_INFO("unloadTo");
-    FLAG_MOVED = true;
 
     // unload to absolute coordinate w.r.t. base-frame
     magnet_msg.data = true;
@@ -620,13 +632,13 @@ public:
 
     magnet_msg.data = false;
     magnet_pub.publish(magnet_msg); // MAGNET OFF
-
+    ROS_INFO("unloadTo: MAGNET OFF");
     // go back to default position
     moveToDefault(true);
     ROS_INFO("unloadTo: Move to Default");
     magnet_msg.data = true;
     magnet_pub.publish(magnet_msg); // MAGNET ON
-    FLAG_MOVED = false;
+    ROS_INFO("unloadTo: MAGNET ON");
 
   }
 
