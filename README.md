@@ -6,6 +6,7 @@
 4. `git clone https://github.com/ROBOTIS-GIT/dynamixel-workbench-msgs.git`
 5. `sudo apt install ros-kinetic-rgbd-launch`
 6. Install Intel Realsense ROS package
+7. Install rosserial for Arduino on ROS-Kinetic following this https://answers.ros.org/question/235620/how-to-install-rosserial-for-arduino-on-ros-kinetic/
 
 ## Installation
 1. cd ~/catkin_ws/src
