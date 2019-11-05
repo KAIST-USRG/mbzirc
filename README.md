@@ -2,11 +2,12 @@
 ## Pre-requisite
 1. install universal_robot and ur_modern_driver packages following this tutorial http://wiki.ros.org/universal_robot/Tutorials/Getting%20Started%20with%20a%20Universal%20Robot%20and%20ROS-Industrial
 2. install moveit package  following this tutorial http://docs.ros.org/melodic/api/moveit_tutorials/html/doc/getting_started/getting_started.html
-3. `git clone https://github.com/ROBOTIS-GIT/DynamixelSDK`
+3. `git clone https://github.com/ROBOTIS-GIT/DynamixelSDK.git`
 4. `git clone https://github.com/ROBOTIS-GIT/dynamixel-workbench-msgs.git`
-5. `sudo apt install ros-kinetic-rgbd-launch`
-6. Install Intel Realsense ROS package
-7. Install rosserial for Arduino on ROS-Kinetic following this https://answers.ros.org/question/235620/how-to-install-rosserial-for-arduino-on-ros-kinetic/
+5. `git clone https://github.com/ROBOTIS-GIT/dynamixel-workbench.git`
+6. `sudo apt install ros-kinetic-rgbd-launch`
+7. Install Intel Realsense ROS package
+8. Install rosserial for Arduino on ROS-Kinetic following this https://answers.ros.org/question/235620/how-to-install-rosserial-for-arduino-on-ros-kinetic/
 
 ## Installation
 1. cd ~/catkin_ws/src
