@@ -12,14 +12,14 @@ def twist_cb(data):
 
     print(odrv0.axis0.error)
     print(odrv0.axis1.error)
-    #print(odrv1.axis0.error)
-    #print(odrv1.axis1.error)
+    print(odrv1.axis0.error)
+    print(odrv1.axis1.error)
 
-    if odrv0.axis0.error != 0 or odrv0.axis1.error != 0:
-        odrv0.axis0.error = 0
-        odrv0.axis1.error = 0
-        odrv0.save_configuration()
-        rospy.loginfo("odrv0 error")
+    #if odrv0.axis0.error != 0 or odrv0.axis1.error != 0:
+    #    odrv0.axis0.error = 0
+    #    odrv0.axis1.error = 0
+    #    odrv0.save_configuration()
+    #    rospy.loginfo("odrv0 error")
     #if odrv1.axis0.error != 0 or odrv1.axis1.error != 0:
     #    odrv1.axis0.error = 0
     #    odrv1.axis1.error = 0
@@ -30,13 +30,9 @@ def twist_cb(data):
     rpm = data.linear.x * 30 / (radius * math.pi)
     rpm_gain = rpm * 3 / 2
 
-    time.sleep(0.025)
     odrv0.axis0.controller.vel_setpoint = rpm_gain
-    time.sleep(0.025)
     odrv0.axis1.controller.vel_setpoint = rpm_gain
-    time.sleep(0.025)
     odrv1.axis0.controller.vel_setpoint = rpm_gain
-    time.sleep(0.025)
     odrv1.axis1.controller.vel_setpoint = rpm_gain
 
     rospy.loginfo(str(rpm) + ' '\
