@@ -12,11 +12,13 @@ void cmdVelCallback(const geometry_msgs::Twist::ConstPtr& twist_msg) {
   double y = twist_msg->linear.y;
   double atan_degree = atan2(y, x) * RAD_DEG;
   dynamixel_degree = atan_degree / 360.0 * RESOLUTION; 
-  if(dynamixel_degree > 501433) {
+  if(atan_degree < 0.001 && atan_degree > -0.001)
+    dynamixel_degree = 0;
+  else if(dynamixel_degree > 501433) {
     dynamixel_degree = -501433 + dynamixel_degree - 501433;
   }
 
-  ROS_INFO("degree: %lf, dynamixel_input: %d", atan_degree, dynamixel_degree);
+  //ROS_INFO("degree: %lf, dynamixel_input: %d", atan_degree, dynamixel_degree);
 }
 
 int main(int argc, char **argv) {
@@ -41,8 +43,8 @@ int main(int argc, char **argv) {
 
     if (client.call(srv))
     {
-      ROS_INFO("send ID and Position Value : %u, %d", (uint8_t)srv.request.id, (int32_t)srv.request.value);
-      ROS_INFO("receive result : %d", (bool)srv.response.comm_result);
+      //ROS_INFO("send ID and Position Value : %u, %d", (uint8_t)srv.request.id, (int32_t)srv.request.value);
+      //ROS_INFO("receive result : %d", (bool)srv.response.comm_result);
     }
     else
     {
@@ -57,8 +59,8 @@ int main(int argc, char **argv) {
 
     if (client.call(srv))
     {
-      ROS_INFO("send ID and Position Value : %u, %d", (uint8_t)srv.request.id, (int32_t)srv.request.value);
-      ROS_INFO("receive result : %d", (bool)srv.response.comm_result);
+      //ROS_INFO("send ID and Position Value : %u, %d", (uint8_t)srv.request.id, (int32_t)srv.request.value);
+      //ROS_INFO("receive result : %d", (bool)srv.response.comm_result);
     }
     else
     {
@@ -73,8 +75,8 @@ int main(int argc, char **argv) {
 
     if (client.call(srv))
     {
-      ROS_INFO("send ID and Position Value : %u, %d", (uint8_t)srv.request.id, (int32_t)srv.request.value);
-      ROS_INFO("receive result : %d", (bool)srv.response.comm_result);
+      //ROS_INFO("send ID and Position Value : %u, %d", (uint8_t)srv.request.id, (int32_t)srv.request.value);
+      //ROS_INFO("receive result : %d", (bool)srv.response.comm_result);
     }
     else
     {
@@ -89,8 +91,8 @@ int main(int argc, char **argv) {
 
     if (client.call(srv))
     {
-      ROS_INFO("send ID and Position Value : %u, %d", (uint8_t)srv.request.id, (int32_t)srv.request.value);
-      ROS_INFO("receive result : %d", (bool)srv.response.comm_result);
+      //ROS_INFO("send ID and Position Value : %u, %d", (uint8_t)srv.request.id, (int32_t)srv.request.value);
+      //ROS_INFO("receive result : %d", (bool)srv.response.comm_result);
     }
     else
     {

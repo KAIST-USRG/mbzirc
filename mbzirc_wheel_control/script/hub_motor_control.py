@@ -27,7 +27,7 @@ def twist_cb(data):
     #    rospy.loginfo("odrv1 error")
 
     radius = 0.127
-    rpm = data.linear.x * 30 / (radius * math.pi)
+    rpm = math.sqrt(data.linear.x**2 + data.linear.y**2) * 30 / (radius * math.pi)
     rpm_gain = rpm * 3 / 2
 
     odrv0.axis0.controller.vel_setpoint = rpm_gain
