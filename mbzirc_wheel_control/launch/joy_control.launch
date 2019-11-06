@@ -1,5 +1,5 @@
 <launch>
-  <!--include path="$(find mbzirc_wheel_control)/launch/teleop.launch" /-->
+  <!--include file="$(find mbzirc_wheel_control)/launch/teleop.launch" /-->
 
   <arg name="usb_port"                default="/dev/ttyUSB0"/>
   <arg name="dxl_baud_rate"           default="57600"/>
@@ -27,5 +27,5 @@
   </node>
 
   <node pkg="mbzirc_wheel_control" type="wheel_control_node" name="wheel_control_node" output="screen"/>
-  <node pkg="mbzirc_wheel_control" type="hub_motor_control.py" name="hub_motor_control" output="screen"/>
+  <!--node pkg="mbzirc_wheel_control" type="hub_motor_control.py" name="hub_motor_control" output="screen"/-->
 </launch>

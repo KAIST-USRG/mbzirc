@@ -9,7 +9,7 @@
     <param name="autorepeat_rate" value="20" />
   </node>
 
-  <node pkg="teleop_twist_joy" name="teleop_twist_joy" type="teleop_node">
+  <node pkg="teleop_twist_joy" name="teleop_twist_joy" type="teleop_node" output="screen">
     <rosparam command="load" file="$(arg config_filepath)" />
   </node>
 </launch>
