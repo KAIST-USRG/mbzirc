@@ -26,8 +26,10 @@
     </rosparam>
   </node>
 
-  <node name="steer_command" type="cob_undercarriage_ctrl_node" pkg="cob_undercarriage_ctrl"/>
+  <node name="steer_command" type="cob_undercarriage_ctrl_node" pkg="cob_undercarriage_ctrl">
+    <remap from="/command" to="/cmd_vel" />
+  </node>
 
-  <node name="joint_publisher" type="joint_publisher.py" pkg="mbzirc_wheel_control"/>
+  <node name="joint_publisher" type="joint_publisher.py" pkg="mbzirc_wheel_control" output="screen"/>
 
 </launch>
