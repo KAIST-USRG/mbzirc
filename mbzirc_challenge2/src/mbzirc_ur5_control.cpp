@@ -17,13 +17,13 @@
 #include "geometry_msgs/Pose.h"
 #include <tf/transform_broadcaster.h>
 
-#define DEBUG
+// #define DEBUG
 #define DELAY 1.0         // for sleep function => robot updating states => 0.4 s fail (?)
 #define END_EFFECTOR 0.07
 #define PLANNING_TIMEOUT 20
 #define Z_OFFSET 0.105
-#define NUM_SUM 7 //20     // to average the pose msg
-#define NUM_DISCARD 3 // 10
+#define NUM_SUM 10 //20     // to average the pose msg
+#define NUM_DISCARD 5 // 10
 
 namespace rvt = rviz_visual_tools;
 
@@ -117,9 +117,9 @@ public:
     store_brick_pub = nh.advertise<std_msgs::UInt32>("/store_brick", 1000);
 
     // magnet_state = nh.subscribe("/magnet_on", 1000, &Arm::magnetStateCallBack, this);
-    pick_brick = nh.subscribe("/pick_brick", 1000, &Arm::pickBrickCallBack, this);
+    // pick_brick = nh.subscribe("/pick_brick", 1000, &Arm::pickBrickCallBack, this);
     pose_msg_from_cam = nh.subscribe("/brick_pose", 1000, &Arm::pickAtCallback, this);
-    store_brick = nh.subscribe("/store_brick", 1000, &Arm::storeBrickCallBack, this);
+    // store_brick = nh.subscribe("/store_brick", 1000, &Arm::storeBrickCallBack, this);
     // unload_brick = nh.subscribe("/unload_brick", 1000, &Arm::unLoadCallBack, this);
   }
 
@@ -185,8 +185,9 @@ public:
         int n = NUM_SUM - NUM_DISCARD;
         ROS_INFO("x = %lf, y = %lf, z =%lf", gb_x_sum/n, gb_y_sum/n, gb_z_sum/n);
         FLAG_AT_DEFAULT = false;
-        visual_tools.prompt("Press 'next' to go to get bricks");
-
+        #ifdef DEBUG
+          visual_tools.prompt("Press 'next' to go to get bricks");
+        #endif
         moveit::core::RobotStatePtr current_state = move_group.getCurrentState();
         // Next get the current set of joint values for the group.
         std::vector<double> joint_group_positions;
@@ -234,11 +235,14 @@ public:
         magnet_pub.publish(magnet_msg); // MAGNET ON
         ROS_INFO("MAGNET_ON");
         ros::Duration(1.).sleep();
-        moveToDefault(true);
+        // moveToDefault(true);
+        moveToFront();
         FLAG_READ_CAM_DATA = false;
         // finish picking up => call the store
         store_brick_msg.data = gb_count_box;
         store_brick_pub.publish(store_brick_msg); // store the brick on UGV
+        ROS_INFO("StoreBrickCallBack");
+        storeOnUGV(7);
       }
     }else{
       // don't get the stream data from camera and clear garbage data
@@ -523,7 +527,7 @@ public:
     if (isPicking == true){
       target_pose.position.x += (toX);                  // #######################################################################################################
       target_pose.position.y += (toY-0.03);           // #######################################################################################################
-      target_pose.position.z += (toZ+0.05); // 0.05 // + up  // #######################################################################################################
+      target_pose.position.z += (-1.07+0.05); // 0.05 // + up  // #######################################################################################################
       waypoints_down.push_back(target_pose);    // back to the position before going down
     }else{
       target_pose.position.x += toX; // + right
@@ -532,7 +536,7 @@ public:
       waypoints_down.push_back(target_pose);    // back to the position before going down
     }
 
-    move_group.setMaxVelocityScalingFactor(0.1); // Cartesian motions are needed to be slower
+    move_group.setMaxVelocityScalingFactor(0.07); // Cartesian motions are needed to be slower
 
     // We want the Cartesian path to be interpolated at a resolution of 1 cm
     moveit_msgs::RobotTrajectory trajectory_down;
@@ -671,7 +675,7 @@ public:
     joint_group_positions[5] = PI/4.;  // radians
     move_group.setJointValueTarget(joint_group_positions);
     move_group.setPlanningTime(PLANNING_TIMEOUT);
-    move_group.setMaxVelocityScalingFactor(0.1);
+    move_group.setMaxVelocityScalingFactor(0.3);
 
     success = (move_group.plan(my_plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS);
     ROS_INFO_NAMED("tutorial", "Visualizing Initial joint plan (joint space goal) %s", success ? "" : "FAILED");
@@ -695,6 +699,7 @@ public:
     magnet_msg.data = false;
     magnet_pub.publish(magnet_msg); // MAGNET OFF
     ROS_INFO("MAGNET_OFF");
+    ros::Duration(3.).sleep();           // wait for robot to update current state otherwise failed
     // go back to default position after finishing storing the bricks
     moveToDefault(true);
 

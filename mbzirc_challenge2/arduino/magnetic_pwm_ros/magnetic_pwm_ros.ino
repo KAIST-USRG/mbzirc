@@ -21,32 +21,17 @@ bool current_status;
 
 void messageCb( const std_msgs::Bool& magnet_on_msg) {
   if (magnet_on_msg.data) {
-    val = 1023;
-    servo = map(val, 0, 1023, 0, 180);     // scale it to use it with the servo (value between 0 and 180)
-//    Serial.println(servo);
-//    Serial.println("on");
-    myservo.write(servo);                  // sets the servo position according to the scaled value
+    myservo.write(175);                  // sets the servo position according to the scaled value
     delay(3000);
     flag = 1;
     current_status = 1;
     myservo.write(90);
   }
-//  if (flag)
-//  {
-//    val = 512;
-//    servo = map(val, 0, 1023, 0, 180);     // scale it to use it with the servo (value between 0 and 180)
-////    Serial.println(servo);
-//    myservo.write(servo);                  // sets the servo position according to the scaled value
-//    delay(3000);
-//      
-//  }
   
   else if (!magnet_on_msg.data)
   {
-    val = 0;
-    servo = map(val, 0, 1023, 0, 180);     // scale it to use it with the servo (value between 0 and 180)
-//    Serial.println(servo);
-    myservo.write(servo);                  // sets the servo position according to the scaled value
+    val = 3;
+    myservo.write(val);                  // sets the servo position according to the scaled value
     delay(12000);
     flag = 0;
     current_status = 0;

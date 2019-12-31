@@ -36,21 +36,20 @@ class JointPublisher:
 
         front_msg.joint_names.append('fl_caster_r_wheel_joint')
         front_msg.joint_names.append('fr_caster_r_wheel_joint')
-        front_msg.desired.velocities.append(data.desired.velocities[0]*10)
-        front_msg.desired.velocities.append(data.desired.velocities[6]*10)
+        front_msg.desired.velocities.append(data.desired.velocities[0])
+        front_msg.desired.velocities.append(data.desired.velocities[6])
         self.front_pub.publish(front_msg)
 
         back_msg.joint_names.append('bl_caster_r_wheel_joint')
         back_msg.joint_names.append('br_caster_r_wheel_joint')
-        back_msg.desired.velocities.append(data.desired.velocities[2]*10)
-        back_msg.desired.velocities.append(data.desired.velocities[4]*10)
+        back_msg.desired.velocities.append(data.desired.velocities[2])
+        back_msg.desired.velocities.append(data.desired.velocities[4])
         self.back_pub.publish(back_msg)
 
         result1 = self.turn_dynamixel(1, data.desired.positions[1]) 
         result2 = self.turn_dynamixel(2, data.desired.positions[3]) 
         result3 = self.turn_dynamixel(3, data.desired.positions[5]) 
         result4 = self.turn_dynamixel(4, data.desired.positions[7]) 
-        rospy.loginfo(result1)
     
 if __name__ == '__main__':
     try:
