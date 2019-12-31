@@ -1,0 +1,5 @@
+<launch>
+  <include file="$(find mbzirc_wheel_control)/launch/joy.launch" />
+  <include file="$(find mbzirc_wheel_control)/launch/wheel_control.launch" />
+  <!--node pkg="mbzirc_wheel_control" type="hub_motor_control.py" name="hub_motor_control" output="screen"/-->
+</launch>
