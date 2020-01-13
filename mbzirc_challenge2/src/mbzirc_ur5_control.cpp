@@ -123,7 +123,7 @@ public:
     moveToDefault_finished_flag_pub = nh.advertise<std_msgs::Bool>("/moveToDefault_finish_flag", 10);
     avg_pose_pub = nh.advertise<geometry_msgs::Pose>("/avg_pose", 10);
     box_count_pub = nh.advertise<std_msgs::UInt16>("/box_count", 10);
-    magnet_state_pub = nh.advertise<std_msgs::Bool>("/magnet_state", 10);
+    magnet_state_pub = nh.advertise<std_msgs::Bool>("/magnet_on", 10);
 
     pose_from_cam_sub = nh.subscribe("/bbox_pose", 10, &Arm::calcAvgCallback, this);
     moveToStorageSide_flag_sub = nh.subscribe("/moveToStorageSide_flag", 10, &Arm::moveToStorageSideFlagCallback, this);
