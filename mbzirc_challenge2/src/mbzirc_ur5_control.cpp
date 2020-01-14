@@ -42,7 +42,10 @@ int gb_count_box = 0;
 float gb_x_sum = 0;
 float gb_y_sum = 0;
 float gb_z_sum = 0;
-float gb_yaw_sum = 0;
+float gb_xq_sum = 0;
+float gb_yq_sum = 0;
+float gb_zq_sum = 0;
+float gb_wq_sum = 0;
 bool FLAG_MAGNET_ON = true;      // Is the magnet on?
 
 
@@ -156,29 +159,21 @@ public:
           gb_x_sum = 0;
           gb_y_sum = 0;
           gb_z_sum = 0;
+          gb_xq_sum = 0;
+          gb_yq_sum = 0;
+          gb_zq_sum = 0;
+          gb_wq_sum = 0;
         }
 
         ROS_INFO("Accumulate the data");
         gb_x_sum += msg->position.x;
         gb_y_sum += msg->position.y;
         gb_z_sum += msg->position.z;
+        gb_xq_sum += msg->orientation.x;
+        gb_yq_sum += msg->orientation.y;
+        gb_zq_sum += msg->orientation.z;
+        gb_wq_sum += msg->orientation.w;
 
-        tf::Quaternion q(
-          msg->orientation.x,
-          msg->orientation.y,
-          msg->orientation.z,
-          msg->orientation.w
-        );
-
-        tf::Matrix3x3 m(q);
-        double roll, pitch, yaw;
-        m.getRPY(roll,pitch,yaw);
-
-        if (yaw<0)
-          yaw += PI;
-        if (yaw>PI/2)
-          yaw = -(PI-yaw);
-        gb_yaw_sum += yaw;
         gb_count_pose_msg += 1;
 
       }else{ // picking up should start from DEFAULT position
@@ -187,8 +182,10 @@ public:
         avg_pose_msg.position.x = gb_x_sum/n;
         avg_pose_msg.position.y = gb_y_sum/n;
         avg_pose_msg.position.z = gb_z_sum/n;
-        avg_pose_msg.orientation.w = gb_count_move;
-        avg_pose_msg.orientation.x = gb_yaw_sum/n;  // yaw angle that the 5th joint should move
+        avg_pose_msg.orientation.x = gb_xq_sum/n;
+        avg_pose_msg.orientation.y = gb_yq_sum/n;
+        avg_pose_msg.orientation.z = gb_zq_sum/n;
+        avg_pose_msg.orientation.w = gb_wq_sum/n;
 
         avg_pose_pub.publish(avg_pose_msg);
         gb_count_move += 1;
@@ -199,6 +196,11 @@ public:
         gb_x_sum = 0;
         gb_y_sum = 0;
         gb_z_sum = 0;
+        gb_xq_sum = 0;
+        gb_yq_sum = 0;
+        gb_zq_sum = 0;
+        gb_wq_sum = 0;
+
         gb_count_pose_msg = 0; // reset the counter of data to be averaged
 
       }
@@ -207,12 +209,16 @@ public:
       gb_x_sum = 0;
       gb_y_sum = 0;
       gb_z_sum = 0;
+      gb_xq_sum = 0;
+      gb_yq_sum = 0;
+      gb_zq_sum = 0;
+      gb_wq_sum = 0;
     }
   }
 
   void _moveXYZCallback(const geometry_msgs::Pose::ConstPtr& msg)
   {
-    if (msg->orientation.w == 0)
+    if (gb_count_move == 0)
     {
       // Move XY position (image frame) to align with the button
       // And simultaneously move down Z/2 at the same time (default pose is too high -> move XY only -> out of working space)
@@ -222,17 +228,36 @@ public:
       #endif
       moveFromCurrentState(msg->position.x, msg->position.y, msg->position.z / 2);
       FLAG_READ_CAM_DATA = true;
-    }else if(msg->orientation.w == 1) // move in to push the button
+    }else if(gb_count_move == 1) // move in to push the button
     {
       // 3 steps
       // Step 1: Rotate the magnetic panel
-
-      double yaw;
-      yaw = msg->orientation.x;
       moveit::core::RobotStatePtr current_state = move_group.getCurrentState();
       // Next get the current set of joint values for the group.
       std::vector<double> joint_group_positions;
       current_state->copyJointGroupPositions(joint_model_group, joint_group_positions);
+
+      // convert quaternion to roll, pitch, yaw
+
+      tf::Quaternion q_temp(
+          // Note that norm of this Quaternion needs to be ONE
+          // Otherwise, it's inaccurate.
+          msg->orientation.x,
+          msg->orientation.y,
+          msg->orientation.z,
+          msg->orientation.w
+          );
+
+      tf::Matrix3x3 m(q_temp);
+      double roll, pitch, yaw;
+      m.getRPY(roll, pitch, yaw);
+
+      if (yaw < 0)
+        yaw += PI;
+      if (yaw > PI/2)
+        yaw = -(PI-yaw);
+
+      ROS_INFO("Roll = %f, Pitch = %f, Yaw = %f", roll*180./PI, pitch*180./PI, yaw*180./PI);
 
       joint_group_positions[5] += yaw;  // radians
       move_group.setJointValueTarget(joint_group_positions);
@@ -247,10 +272,11 @@ public:
       visual_tools.publishTrajectoryLine(my_plan.trajectory_, joint_model_group);
       visual_tools.trigger();
 
+
+      ROS_INFO("yaw = %f", yaw*180./PI);
       #ifdef DEBUG
           visual_tools.prompt("Press 'next' to front position"); // DEBUG remove if not NEEDED
       #endif
-      ROS_INFO("yaw = %f", yaw*180./PI);
       move_group.move(); //move to storage on left side
 
       // Step 2: Move down to get the brick
