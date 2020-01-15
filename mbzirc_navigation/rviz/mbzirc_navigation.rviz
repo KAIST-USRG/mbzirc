@@ -6,6 +6,7 @@ Panels:
       Expanded:
         - /Global Options1
         - /Status1
+        - /PointCloud23
         - /MarkerArray1/Namespaces1
         - /Path2
       Splitter Ratio: 0.5
@@ -65,7 +66,11 @@ Visualization Manager:
           Value: true
         map:
           Value: true
-        velodyne:
+        os1_imu:
+          Value: true
+        os1_lidar:
+          Value: true
+        os1_sensor:
           Value: true
       Marker Scale: 4
       Name: TF
@@ -77,8 +82,11 @@ Visualization Manager:
           base_link:
             gx5_link:
               {}
-            velodyne:
-              {}
+            os1_sensor:
+              os1_imu:
+                {}
+              os1_lidar:
+                {}
       Update Interval: 0
       Value: true
     - Alpha: 1
@@ -93,7 +101,7 @@ Visualization Manager:
       Color: 255; 255; 255
       Color Transformer: FlatColor
       Decay Time: 0
-      Enabled: true
+      Enabled: false
       Invert Rainbow: false
       Max Color: 255; 255; 255
       Max Intensity: 255
@@ -106,11 +114,11 @@ Visualization Manager:
       Size (Pixels): 3
       Size (m): 0.10000000149011612
       Style: Flat Squares
-      Topic: /velodyne_points
+      Topic: /os1_cloud_node/points
       Unreliable: false
       Use Fixed Frame: true
       Use rainbow: true
-      Value: true
+      Value: false
     - Alpha: 1
       Autocompute Intensity Bounds: true
       Autocompute Value Bounds:
@@ -153,24 +161,24 @@ Visualization Manager:
       Color: 255; 255; 255
       Color Transformer: Intensity
       Decay Time: 0
-      Enabled: false
+      Enabled: true
       Invert Rainbow: false
       Max Color: 255; 255; 255
-      Max Intensity: 232.6666717529297
-      Min Color: 0; 255; 0
-      Min Intensity: 0
+      Max Intensity: 1905
+      Min Color: 204; 51; 204
+      Min Intensity: 3.4074385166168213
       Name: PointCloud2
       Position Transformer: XYZ
       Queue Size: 10
       Selectable: true
-      Size (Pixels): 3
+      Size (Pixels): 2
       Size (m): 0.05000000074505806
-      Style: Flat Squares
+      Style: Points
       Topic: /aligned_points
       Unreliable: false
       Use Fixed Frame: true
       Use rainbow: false
-      Value: false
+      Value: true
     - Angle Tolerance: 0.10000000149011612
       Class: rviz/Odometry
       Covariance:
@@ -382,9 +390,9 @@ Visualization Manager:
         Swap Stereo Eyes: false
         Value: false
       Focal Point:
-        X: 9.287256240844727
-        Y: -0.1918853521347046
-        Z: -25.248443603515625
+        X: 0.896994411945343
+        Y: 0.20769427716732025
+        Z: -25.248233795166016
       Focal Shape Fixed Size: true
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false

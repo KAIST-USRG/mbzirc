@@ -3,17 +3,20 @@
   <!-- arguments -->
   <arg name="nodelet_manager" default="velodyne_nodelet_manager" />
   <arg name="imu_topic" default="/gx5/imu/data" />
-  <arg name="points_topic" default="/velodyne_points" />
+  <!--arg name="points_topic" default="/velodyne_points" /-->
+  <arg name="points_topic" default="/os1_cloud_node/points" />
 
-  <node pkg="tf" type="static_transform_publisher" name="lidar2base_publisher" args="0 0 1.0 0 0 0 base_link velodyne 40" />
-  <node pkg="tf" type="static_transform_publisher" name="imu2base_publisher" args="0 0 0.5 0 0 0 base_link gx5_link 40" />
+  <!--node pkg="tf" type="static_transform_publisher" name="os1_transform" args="0 0 0 3.14159 0 0 os1_sensor os1_lidar 100" /-->
+  <!--node pkg="tf2_ros" type="static_transform_publisher" name="lidar2base_publisher" args="0 0 1.0 0 0 0 base_link velodyne 40" /-->
+  <!--node pkg="tf2_ros" type="static_transform_publisher" name="lidar2base_publisher" args="0 0 1.0 0 0 0 base_link os1_sensor" />
+  <node pkg="tf2_ros" type="static_transform_publisher" name="imu2base_publisher" args="0 0 0.5 0 0 0 base_link gx5_link" /-->
   <!-- in case you use velodyne_driver, comment out the following line -->
-  <!--node pkg="nodelet" type="nodelet" name="$(arg nodelet_manager)" args="manager" output="screen"/-->
+  <node pkg="nodelet" type="nodelet" name="$(arg nodelet_manager)" args="manager" output="screen"/>
 
     <!-- globalmap_server_nodelet -->
     <node pkg="nodelet" type="nodelet" name="globalmap_server_nodelet" args="load hdl_localization/GlobalmapServerNodelet $(arg nodelet_manager)">
-      <param name="globalmap_pcd" value="$(find hdl_localization)/data/KI_1F.pcd" />
-      <param name="downsample_resolution" value="0.1" />
+      <param name="globalmap_pcd" value="$(find mbzirc_navigation)/map/KI_1F_ouster.pcd" />
+      <param name="downsample_resolution" value="0.3" />
     </node>
 
     <!-- hdl_localization_nodelet -->
@@ -30,7 +33,7 @@
         <!-- if NDT is slow for your PC, try DIRECT1 serach method, which is a bit unstable but extremely fast -->
         <param name="ndt_neighbor_search_method" value="DIRECT7" />
         <param name="ndt_resolution" value="1.0" />
-        <param name="downsample_resolution" value="0.1" />
+        <param name="downsample_resolution" value="0.5" />
         <!-- if "specify_init_pose" is true, pose estimator will be initialized with the following params -->
         <!-- otherwise, you need to input an initial pose with "2D Pose Estimate" on rviz" -->
         <param name="specify_init_pose" value="true" />
