@@ -1,4 +1,18 @@
 # mbzirc_usrg
+
+## How to start up the 4 wheel steering robot
+
+### Bring up the robot
+roslaunch mbzirc_wheel_control 4_wheel_control.launch 
+
+### Launch joystick launch file
+roslaunch mbzirc_wheel_control joy.launch
+
+### Turn on the odrives
+rosservice call /back/odrive/calibrate_motors "{}" 
+rosservice call /front/odrive/calibrate_motors "{}" 
+
+
 ## Pre-requisite
 1. install universal_robot and ur_modern_driver packages following this tutorial http://wiki.ros.org/universal_robot/Tutorials/Getting%20Started%20with%20a%20Universal%20Robot%20and%20ROS-Industrial
 2. install moveit package  following this tutorial http://docs.ros.org/melodic/api/moveit_tutorials/html/doc/getting_started/getting_started.html
