@@ -320,11 +320,6 @@ public:
     // Publish: moveToStorageSide_finished_flag_msg
     if (msg->data == true){
       gb_count_box += 1;
-//      if(gb_count_box < 3){
-//        moveToStorageSide12();
-//      }else{
-//        moveToStorageSide345();
-//      }
       moveToStorageSide12(gb_count_box);
 
       magnet_state_msg.data = false;
@@ -333,7 +328,7 @@ public:
       detachBrick();
 
       moveToStorageSide_finished_flag_msg.data = true;
-      moveToStorageSide_finished_flag_pub.publish(moveToStorageSide_finished_flag_msg); // let the planner know that the arm is up
+      moveToStorageSide_finished_flag_pub.publish(moveToStorageSide_finished_flag_msg);
 
       box_count_msg.data = gb_count_box;
       box_count_pub.publish(box_count_msg); // Publish the number of boxes in the container after storing
@@ -412,7 +407,7 @@ public:
       joint_group_positions[2] = PI/4;
       joint_group_positions[3] = 2 * PI - PI/4;
       joint_group_positions[4] = -PI/2;
-      joint_group_positions[5] = PI/2;
+      joint_group_positions[5] = PI/4;
       move_group.setJointValueTarget(joint_group_positions);
       move_group.setMaxVelocityScalingFactor(0.3);
       move_group.setMaxAccelerationScalingFactor(0.3);
@@ -504,10 +499,14 @@ public:
     move_group.move();                      // BLOCKING FUNCTION
 
     // STEP4: Go to the storage
-    geometry_msgs::Pose target_pose = move_group.getCurrentPose().pose;
+    geometry_msgs::Pose target_pose;
     std::vector<geometry_msgs::Pose> waypoints_to_storage;
+    
+    target_pose = move_group.getCurrentPose().pose; // Cartesian Path from the current position
+    ros::Duration(0.5).sleep();
     target_pose = move_group.getCurrentPose().pose; // Cartesian Path from the current position
 
+    waypoints_to_storage.push_back(target_pose);
     target_pose.position.x = -0.58;
     target_pose.position.y = -0.1;
     target_pose.position.z = 0.65;
@@ -540,7 +539,9 @@ public:
     // STEP5: Move Down
     std::vector<geometry_msgs::Pose> waypoints_down;
     target_pose = move_group.getCurrentPose().pose; // Cartesian Path from the current position
-
+    ros::Duration(0.5).sleep();
+    target_pose = move_group.getCurrentPose().pose; // Cartesian Path from the current position
+    waypoints_down.push_back(target_pose);
     target_pose.position.z = -0.25 + (box_count - 1) * 0.20;
     waypoints_down.push_back(target_pose);
 
@@ -550,7 +551,7 @@ public:
 
     moveit_msgs::RobotTrajectory trajectory_down;
     fraction = move_group.computeCartesianPath(waypoints_down, eef_step, jump_threshold, trajectory_down);
-    ROS_INFO_NAMED("tutorial", "Visualizing CartesianPath down (%.2f%% achieved)", fraction * 100.0);
+    ROS_INFO_NAMED("tutorial", "Visualizing CartesianPath step 5: down (%.2f%% achieved)", fraction * 100.0);
     cartesian_plan.trajectory_ = trajectory_down;
 
     // Visualize the plan in RViz
