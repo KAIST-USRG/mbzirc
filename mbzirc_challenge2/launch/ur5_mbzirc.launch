@@ -1,0 +1,21 @@
+<?xml version="1.0"?>
+<launch>
+
+  <!-- Connect UR5 driver to the arm -->
+  <include file="$(find ur_modern_driver)/launch/ur5_bringup.launch">
+    <arg name="robot_ip" value="192.168.2.102"/>
+  </include>
+
+  <!-- Initialize the planning scene -->
+  <include file="$(find ur5_moveit_config)/launch/ur5_moveit_planning_execution.launch"/>
+
+  <!-- Initialize RVIZ -->
+  <include file="$(find ur5_moveit_config)/launch/moveit_rviz.launch">
+    <arg name="config" value="true"/>
+  </include>
+
+  <!-- Initialize the UR5 controller node -->
+  <node name="UR5_controller" pkg="mbzirc_challenge2" type="mbzirc_ur5_control" respawn="false" output="screen">
+  </node>
+
+ </launch>
