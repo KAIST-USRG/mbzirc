@@ -17,7 +17,7 @@
 ## To run ur5
 1. Connect to UR5 arm using ur_modern_driver package
 
-`roslaunch ur_modern_driver ur5_bringup.launch robot_ip:=192.168.1.102 [reverse_port:=REVERSE_PORT]`
+`roslaunch ur_modern_driver ur5_bringup.launch robot_ip:=192.168.2.102 [reverse_port:=REVERSE_PORT]`
 
 2. Launch the planning node
 
