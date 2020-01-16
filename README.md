@@ -29,7 +29,7 @@
 
 4. Launch the ur5_controller
 
-`roslaunch mbzirc_usrg_challenge2 move_group_interface_tutorial.launch`
+`roslaunch mbzirc_challenge2 move_group_interface_tutorial.launch`
 
 ## To run brick pose estimation
 `roslaunch mbzirc_brick_pose estimate_pose_2d.launch`
