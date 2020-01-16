@@ -414,8 +414,8 @@ public:
       joint_group_positions[4] = -PI/2;
       joint_group_positions[5] = PI/2;
       move_group.setJointValueTarget(joint_group_positions);
-      move_group.setMaxVelocityScalingFactor(1);
-      move_group.setMaxAccelerationScalingFactor(1);
+      move_group.setMaxVelocityScalingFactor(0.3);
+      move_group.setMaxAccelerationScalingFactor(0.3);
       move_group.setPlanningTime(PLANNING_TIMEOUT);
       move_group.setGoalJointTolerance(0.01);
 //      move_group.setMaxVelocityScalingFactor(0.5);
@@ -447,8 +447,8 @@ public:
 
     move_group.setJointValueTarget(joint_group_positions);
     move_group.setPlanningTime(PLANNING_TIMEOUT);
-    move_group.setMaxVelocityScalingFactor(1);
-    move_group.setMaxAccelerationScalingFactor(1);
+    move_group.setMaxVelocityScalingFactor(0.3);
+    move_group.setMaxAccelerationScalingFactor(0.3);
     move_group.setGoalJointTolerance(0.01);
 
     success = (move_group.plan(my_plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS);
@@ -489,8 +489,8 @@ public:
     joint_group_positions[5] = PI/2;
 
     move_group.setJointValueTarget(joint_group_positions);
-    move_group.setMaxVelocityScalingFactor(1);
-    move_group.setMaxAccelerationScalingFactor(1);
+    move_group.setMaxVelocityScalingFactor(0.3);
+    move_group.setMaxAccelerationScalingFactor(0.3);
     move_group.setPlanningTime(PLANNING_TIMEOUT);
     move_group.setGoalJointTolerance(0.001);
 
@@ -520,7 +520,7 @@ public:
 
     moveit_msgs::RobotTrajectory trajectory_to_storage;
     fraction = move_group.computeCartesianPath(waypoints_to_storage, eef_step, jump_threshold, trajectory_to_storage);
-    ROS_INFO_NAMED("tutorial", "Visualizing CartesianPath down (%.2f%% achieved)", fraction * 100.0);
+    ROS_INFO_NAMED("tutorial", "Visualizing CartesianPath to Storage (%.2f%% achieved)", fraction * 100.0);
     cartesian_plan.trajectory_ = trajectory_to_storage;
 
     // Visualize the plan in RViz
@@ -583,8 +583,8 @@ public:
 
     move_group.setJointValueTarget(joint_group_positions);
     move_group.setPlanningTime(PLANNING_TIMEOUT);
-    move_group.setMaxVelocityScalingFactor(1);
-    move_group.setMaxAccelerationScalingFactor(1);
+    move_group.setMaxVelocityScalingFactor(0.3);
+    move_group.setMaxAccelerationScalingFactor(0.3);
     move_group.setGoalJointTolerance(0.01);
 
     success = (move_group.plan(my_plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS);
