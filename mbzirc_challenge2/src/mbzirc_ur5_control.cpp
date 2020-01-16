@@ -10,6 +10,7 @@
 #include <moveit_visual_tools/moveit_visual_tools.h>
 #include "std_msgs/Bool.h"
 #include "std_msgs/UInt16.h"
+#include "std_msgs/Float32.h"
 #include "geometry_msgs/Point.h"
 #include <tf/transform_broadcaster.h>
 
@@ -20,6 +21,7 @@
 #define Z_OFFSET 0.105
 #define NUM_SUM 3      // to average the pose message
 #define NUM_DISCARD 10
+#define THRESHOULD_DISTANCE 0.02
 
 // CONSTANT 
 
@@ -81,6 +83,7 @@ private:
   ros::Subscriber readCamData_flag_sub;
   ros::Subscriber manual_moveXVZ_sub;
   ros::Subscriber magnet_state_sub;
+  ros::Subscriber sensor_range_sub;
 
   ros::NodeHandle nh_;
   ros::NodeHandle nh;
@@ -134,7 +137,8 @@ public:
     moveToDefault_flag_sub = nh.subscribe("/moveToDefault_flag", 10, &Arm::moveToDafaultFlagCallback, this);
     moveXYZ_sub = nh.subscribe("/avg_pose", 10, &Arm::_moveXYZCallback, this);
     readCamData_flag_sub = nh.subscribe("/readCamData_Flag", 100, &Arm::readCamDataFlagCallback, this);
-    manual_moveXVZ_sub = nh.subscribe("/manual_moveXVZ", 10, &Arm::manual_moveXVZ, this);
+    manual_moveXVZ_sub = nh.subscribe("/manual_moveXVZ", 10, &Arm::manual_moveXYZ, this);
+    sensor_range_sub = nh.subscribe("/sensor_range", 1, &Arm::moveDownCallBack, this);
 
   }
 
@@ -725,9 +729,11 @@ public:
 
   }
 
-  // FOR DEBUGGING REMOVE IF NOT NEEDED
-  void manual_moveXVZ(const geometry_msgs::Pose::ConstPtr& msg)
+  void moveDownCallBack(const std_msgs::Float32::ConstPtr& msg)
   {
+
+    if (msg->data >= THRESHOULD_DISTANCE)
+    {
       geometry_msgs::Pose target_pose = move_group.getCurrentPose().pose;
       std::vector<geometry_msgs::Pose> waypoints_down;
       target_pose = move_group.getCurrentPose().pose; // Cartesian Path from the current position
@@ -736,24 +742,20 @@ public:
       // +X: right
       // +Y: front
       // +Z: up
-      target_pose.position.x = msg->position.x;
-      target_pose.position.y = msg->position.y; // Measure DIST_CAM_TO_EE, see CONSTANT part
-
-      // Measure DIST_CAM_TO_EE, see CONSTANT part => read button's position from camera, but we want to move EE to the button
-      target_pose.position.z = msg->position.z;
+      target_pose.position.z -= 0.005;  // go down by 0.005 millimeter
       waypoints_down.push_back(target_pose);
 
       // Seong) Set planner, Max velo and Planning time
-//      move_group.setPlannerId("RRTConnectkConfigDefault");
       move_group.setPlanningTime(PLANNING_TIMEOUT);
       move_group.setGoalOrientationTolerance(0.01);
       move_group.setGoalPositionTolerance(0.01);
-//      move_group.setMaxVelocityScalingFactor(0.1);
-//      move_group.setMaxAccelerationScalingFactor(0.1);
+      move_group.setMaxVelocityScalingFactor(0.01);
+      move_group.setMaxAccelerationScalingFactor(0.01);
 
 
       moveit_msgs::RobotTrajectory trajectory_down;
-      fraction = move_group.computeCartesianPath(waypoints_down, eef_step, jump_threshold, trajectory_down);
+      float eef_step_temp = 0.001;  // resolution of 1 mm
+      fraction = move_group.computeCartesianPath(waypoints_down, eef_step_temp, jump_threshold, trajectory_down);
       ROS_INFO_NAMED("tutorial", "Visualizing CartesianPath down (%.2f%% achieved)", fraction * 100.0);
       cartesian_plan.trajectory_ = trajectory_down;
 
@@ -762,6 +764,50 @@ public:
     #endif
 
       move_group.execute(cartesian_plan);
+    }else{
+      // Do Nothing
+    }
+
+  }
+
+
+  // FOR DEBUGGING REMOVE IF NOT NEEDED
+  void manual_moveXYZ(const geometry_msgs::Pose::ConstPtr& msg)
+  {
+    geometry_msgs::Pose target_pose = move_group.getCurrentPose().pose;
+    std::vector<geometry_msgs::Pose> waypoints_down;
+    target_pose = move_group.getCurrentPose().pose; // Cartesian Path from the current position
+
+    // move according to the robot frame
+    // +X: right
+    // +Y: front
+    // +Z: up
+    target_pose.position.x = msg->position.x;
+    target_pose.position.y = msg->position.y; // Measure DIST_CAM_TO_EE, see CONSTANT part
+
+    // Measure DIST_CAM_TO_EE, see CONSTANT part => read button's position from camera, but we want to move EE to the button
+    target_pose.position.z = msg->position.z;
+    waypoints_down.push_back(target_pose);
+
+    // Seong) Set planner, Max velo and Planning time
+//      move_group.setPlannerId("RRTConnectkConfigDefault");
+    move_group.setPlanningTime(PLANNING_TIMEOUT);
+    move_group.setGoalOrientationTolerance(0.01);
+    move_group.setGoalPositionTolerance(0.01);
+//      move_group.setMaxVelocityScalingFactor(0.1);
+//      move_group.setMaxAccelerationScalingFactor(0.1);
+
+
+    moveit_msgs::RobotTrajectory trajectory_down;
+    fraction = move_group.computeCartesianPath(waypoints_down, eef_step, jump_threshold, trajectory_down);
+    ROS_INFO_NAMED("tutorial", "Visualizing CartesianPath down (%.2f%% achieved)", fraction * 100.0);
+    cartesian_plan.trajectory_ = trajectory_down;
+
+  #ifdef DEBUG
+    visual_tools.prompt("Press 'next' to go down");
+  #endif
+
+    move_group.execute(cartesian_plan);
 //      ros::Duration(DELAY).sleep();           // wait for robot to update current state otherwise failed
   }
 
