@@ -876,6 +876,37 @@ public:
       UGV_base2.primitive_poses.push_back(pose_UGV_base2);
       UGV_base2.operation = UGV_base2.ADD;
 
+      // ---------- Magnet Panel at end effector
+      moveit_msgs::CollisionObject magnet_panel;
+      magnet_panel.header.frame_id = move_group.getEndEffectorLink(); // reference to end-effector frame
+      magnet_panel.id = "magnet_panel"; // The id of the object is used to identify it.
+
+      shape_msgs::SolidPrimitive primitive_magnet_panel; // Define UGV_body dimension (in meter)
+      primitive_magnet_panel.type = primitive_magnet_panel.BOX;
+      primitive_magnet_panel.dimensions.resize(3);
+      primitive_magnet_panel.dimensions[0] = 0.0627;  // length (x)
+      primitive_magnet_panel.dimensions[1] = 0.11;  // width  (y)
+      primitive_magnet_panel.dimensions[2] = 0.16;  // height (z)
+
+      // magnetic panel
+      geometry_msgs::Pose pose_magnet_panel; // Define a pose for the UGV_body (specified relative to frame_id)
+//      q.setRPY(45, 0, 0);
+//      q.normalize();
+      // Rotate 45 degree about x-axis from https://quaternions.online/
+      pose_magnet_panel.orientation.x = 0.383;
+      pose_magnet_panel.orientation.y = 0.0;
+      pose_magnet_panel.orientation.z = 0.0;
+      pose_magnet_panel.orientation.w = 0.924;
+
+      //note the axis of EE
+      pose_magnet_panel.position.x = primitive_magnet_panel.dimensions[0]/2;
+      pose_magnet_panel.position.y = 0.02475;
+      pose_magnet_panel.position.z = 0.02475;
+
+      magnet_panel.primitives.push_back(primitive_magnet_panel);
+      magnet_panel.primitive_poses.push_back(pose_magnet_panel);
+      magnet_panel.operation = magnet_panel.ADD;
+
       // ---------- Container1
       moveit_msgs::CollisionObject Container1; // Define a collision object ROS message.
       Container1.header.frame_id = move_group.getPlanningFrame();
@@ -961,19 +992,19 @@ public:
       std::vector<moveit_msgs::CollisionObject> collision_robot_body;
       collision_robot_body.push_back(UGV_base);
       collision_robot_body.push_back(UGV_base2);
+      collision_robot_body.push_back(magnet_panel);
       collision_robot_body.push_back(Container1);
       collision_robot_body.push_back(Container2);
       collision_robot_body.push_back(ground);
       planning_scene_interface.addCollisionObjects(collision_robot_body); //add the collision object into the world
       ros::Duration(DELAY).sleep(); // wait to build the object before attaching to ee
+      move_group.attachObject(magnet_panel.id); // attach the magnet panel to end-effector
 
 
   }
 
   void attachBrick()
   {
-    // ---------- Magnet Panel at end effector
-
     brick.header.frame_id = move_group.getEndEffectorLink(); // reference to end-effector frame
     brick.id = "brick"; // The id of the object is used to identify it.
 
