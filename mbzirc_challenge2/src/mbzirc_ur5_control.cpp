@@ -456,7 +456,7 @@ public:
     move_group.setGoalJointTolerance(0.01);
 
     success = (move_group.plan(my_plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS);
-    ROS_INFO_NAMED("tutorial", "Visualizing Initial joint plan (joint space goal) %s", success ? "SUCCEEDED" : "FAILED");
+    ROS_INFO_NAMED("tutorial", "moveToStorageSide Step 1: rotate up %s", success ? "SUCCEEDED" : "FAILED");
 
 
   #ifdef DEBUG
@@ -477,7 +477,7 @@ public:
     move_group.setPlanningTime(PLANNING_TIMEOUT);
     move_group.setGoalJointTolerance(0.01);
 
-    ROS_INFO_NAMED("tutorial", "Visualizing Initial joint plan (joint space goal) %s", success ? "SUCCEEDED" : "FAILED");
+    ROS_INFO_NAMED("tutorial", "moveToStorageSide Step 2: Turn left %s", success ? "SUCCEEDED" : "FAILED");
 
 
     #ifdef DEBUG
@@ -503,7 +503,7 @@ public:
     move_group.setGoalJointTolerance(0.001);
 
     success = (move_group.plan(my_plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS);
-    ROS_INFO_NAMED("tutorial", "Visualizing Initial joint plan (joint space goal) %s", success ? "SUCCEEDED" : "FAILED");
+    ROS_INFO_NAMED("tutorial", "moveToStorageSide Step 3: Rotate Down %s", success ? "SUCCEEDED" : "FAILED");
 
     #ifdef DEBUG
       visual_tools.prompt("Press 'next' to front position");
@@ -519,7 +519,7 @@ public:
     ros::Duration(0.5).sleep();
     target_pose = move_group.getCurrentPose().pose; // Cartesian Path from the current position
 
-    waypoints_to_storage.push_back(target_pose);
+//    waypoints_to_storage.push_back(target_pose);
     target_pose.position.x = -0.58;
     target_pose.position.y = -0.1;
     target_pose.position.z = 0.65;
@@ -532,7 +532,7 @@ public:
 
     moveit_msgs::RobotTrajectory trajectory_to_storage;
     fraction = move_group.computeCartesianPath(waypoints_to_storage, eef_step, jump_threshold, trajectory_to_storage);
-    ROS_INFO_NAMED("tutorial", "Visualizing CartesianPath to Storage (%.2f%% achieved)", fraction * 100.0);
+    ROS_INFO_NAMED("tutorial", "moveToStorageSide Step 4: Cartesian To Storage (%.2f%% achieved)", fraction * 100.0);
     cartesian_plan.trajectory_ = trajectory_to_storage;
 
     // Visualize the plan in RViz
@@ -554,7 +554,7 @@ public:
     target_pose = move_group.getCurrentPose().pose; // Cartesian Path from the current position
     ros::Duration(0.5).sleep();
     target_pose = move_group.getCurrentPose().pose; // Cartesian Path from the current position
-    waypoints_down.push_back(target_pose);
+//    waypoints_down.push_back(target_pose);
     target_pose.position.z = -0.25 + (box_count - 1) * 0.20;
     waypoints_down.push_back(target_pose);
 
@@ -564,7 +564,7 @@ public:
 
     moveit_msgs::RobotTrajectory trajectory_down;
     fraction = move_group.computeCartesianPath(waypoints_down, eef_step, jump_threshold, trajectory_down);
-    ROS_INFO_NAMED("tutorial", "Visualizing CartesianPath step 5: down (%.2f%% achieved)", fraction * 100.0);
+    ROS_INFO_NAMED("tutorial", "moveToStorageSide Step 5: Go down (%.2f%% achieved)", fraction * 100.0);
     cartesian_plan.trajectory_ = trajectory_down;
 
     // Visualize the plan in RViz
