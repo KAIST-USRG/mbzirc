@@ -15,6 +15,7 @@
 
     <!-- globalmap_server_nodelet -->
     <node pkg="nodelet" type="nodelet" name="globalmap_server_nodelet" args="load hdl_localization/GlobalmapServerNodelet $(arg nodelet_manager)">
+      <!--param name="globalmap_pcd" value="$(find mbzirc_navigation)/map/KI_1F_puck.pcd" /-->
       <param name="globalmap_pcd" value="$(find mbzirc_navigation)/map/KI_1F_ouster.pcd" />
       <param name="downsample_resolution" value="0.3" />
     </node>
@@ -32,8 +33,10 @@
         <!-- ndt settings -->
         <!-- if NDT is slow for your PC, try DIRECT1 serach method, which is a bit unstable but extremely fast -->
         <param name="ndt_neighbor_search_method" value="DIRECT7" />
+        <param name="sensor_frame" value="os1_lidar" />
+        <param name="base_frame" value="base_link" />
         <param name="ndt_resolution" value="1.0" />
-        <param name="downsample_resolution" value="0.5" />
+        <param name="downsample_resolution" value="0.3" />
         <!-- if "specify_init_pose" is true, pose estimator will be initialized with the following params -->
         <!-- otherwise, you need to input an initial pose with "2D Pose Estimate" on rviz" -->
         <param name="specify_init_pose" value="true" />

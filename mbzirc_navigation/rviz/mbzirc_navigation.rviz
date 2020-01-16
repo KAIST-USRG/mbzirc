@@ -6,7 +6,9 @@ Panels:
       Expanded:
         - /Global Options1
         - /Status1
+        - /TF1
         - /PointCloud23
+        - /Odometry1/Status1
         - /MarkerArray1/Namespaces1
         - /Path2
       Splitter Ratio: 0.5
@@ -72,7 +74,7 @@ Visualization Manager:
           Value: true
         os1_sensor:
           Value: true
-      Marker Scale: 4
+      Marker Scale: 10
       Name: TF
       Show Arrows: true
       Show Axes: true
@@ -134,9 +136,9 @@ Visualization Manager:
       Enabled: true
       Invert Rainbow: false
       Max Color: 255; 255; 255
-      Max Intensity: 10.613347053527832
+      Max Intensity: 12.023908615112305
       Min Color: 0; 0; 0
-      Min Intensity: -5.886653423309326
+      Min Intensity: -5.576091766357422
       Name: PointCloud2
       Position Transformer: XYZ
       Queue Size: 10
@@ -164,9 +166,9 @@ Visualization Manager:
       Enabled: true
       Invert Rainbow: false
       Max Color: 255; 255; 255
-      Max Intensity: 1905
+      Max Intensity: 2552
       Min Color: 204; 51; 204
-      Min Intensity: 3.4074385166168213
+      Min Intensity: 2.4146015644073486
       Name: PointCloud2
       Position Transformer: XYZ
       Queue Size: 10
@@ -207,8 +209,8 @@ Visualization Manager:
         Color: 255; 25; 0
         Head Length: 0.30000001192092896
         Head Radius: 0.10000000149011612
-        Shaft Length: 1
-        Shaft Radius: 0.05000000074505806
+        Shaft Length: 2
+        Shaft Radius: 0.5
         Value: Arrow
       Topic: /odom
       Unreliable: false
@@ -383,25 +385,25 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/Orbit
-      Distance: 109.70658874511719
+      Distance: 72.97533416748047
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
         Swap Stereo Eyes: false
         Value: false
       Focal Point:
-        X: 0.896994411945343
-        Y: 0.20769427716732025
-        Z: -25.248233795166016
+        X: -1.4823851585388184
+        Y: 1.4343883991241455
+        Z: -16.814960479736328
       Focal Shape Fixed Size: true
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 1.5697963237762451
+      Pitch: 1.1847968101501465
       Target Frame: <Fixed Frame>
       Value: Orbit (rviz)
-      Yaw: 4.689819812774658
+      Yaw: 5.9648308753967285
     Saved: ~
 Window Geometry:
   Displays:
