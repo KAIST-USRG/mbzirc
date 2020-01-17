@@ -16,7 +16,7 @@
     <!-- globalmap_server_nodelet -->
     <node pkg="nodelet" type="nodelet" name="globalmap_server_nodelet" args="load hdl_localization/GlobalmapServerNodelet $(arg nodelet_manager)">
       <!--param name="globalmap_pcd" value="$(find mbzirc_navigation)/map/KI_1F_puck.pcd" /-->
-      <param name="globalmap_pcd" value="$(find mbzirc_navigation)/map/KI_1F_ouster.pcd" />
+      <param name="globalmap_pcd" value="$(find mbzirc_navigation)/map/KI_2F_ouster.pcd" />
       <param name="downsample_resolution" value="0.3" />
     </node>
 

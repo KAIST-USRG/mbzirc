@@ -1,7 +1,7 @@
 <launch>
-  <include file="$(find hdl_localization)/launch/hdl_localization.launch" />
+  <include file="$(find mbzirc_navigation)/launch/hdl_localization.launch" />
 
-  <node name="map_server" pkg="map_server" type="map_server" args="$(find mbzirc_navigation)/map/map.yaml" output="screen"/>
+  <node name="map_server" pkg="map_server" type="map_server" args="$(find mbzirc_navigation)/map/KI_2F_ouster.yaml" output="screen"/>
 
   <node pkg="move_base" type="move_base" respawn="false" name="move_base" output="screen">
     <rosparam file="$(find mbzirc_navigation)/cfg/costmap_common_params.yaml" command="load" ns="global_costmap" /> 
