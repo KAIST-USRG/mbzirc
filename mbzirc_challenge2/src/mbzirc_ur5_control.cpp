@@ -11,7 +11,6 @@
 #include "std_msgs/Bool.h"
 #include "std_msgs/UInt16.h"
 #include "std_msgs/Float32.h"
-#include "geometry_msgs/Point.h"
 #include <tf/transform_broadcaster.h>
 
 //#define DEBUG
@@ -36,7 +35,8 @@ tf2::Quaternion q;
 // FLAG for robot motion
 
 bool FLAG_READ_CAM_DATA = false;    // Should the arm read message from camera?
-
+bool FLAG_SWITCH_TOUCHED = false;
+bool FLAG_MAGNET_ON = true;      // Is the magnet on?
 
 int gb_count_pose_msg = 0;
 int gb_discard_noise = 0;
@@ -49,7 +49,7 @@ float gb_xq_sum = 0;
 float gb_yq_sum = 0;
 float gb_zq_sum = 0;
 float gb_wq_sum = 0;
-bool FLAG_MAGNET_ON = true;      // Is the magnet on?
+
 
 
 class Arm{
@@ -84,6 +84,7 @@ private:
   ros::Subscriber manual_moveXVZ_sub;
   ros::Subscriber magnet_state_sub;
   ros::Subscriber sensor_range_sub;
+  ros::Subscriber switch_state_sub;
 
   ros::NodeHandle nh_;
   ros::NodeHandle nh;
@@ -92,6 +93,7 @@ private:
   moveit_visual_tools::MoveItVisualTools visual_tools;
   moveit::core::RobotStatePtr current_state;
   geometry_msgs::Pose target_pose;
+
 
   const robot_state::JointModelGroup* joint_model_group;
   Eigen::Isometry3d text_pose;
@@ -140,6 +142,7 @@ public:
     readCamData_flag_sub = nh.subscribe("/readCamData_Flag", 100, &Arm::readCamDataFlagCallback, this);
     manual_moveXVZ_sub = nh.subscribe("/manual_moveXVZ", 10, &Arm::manual_moveXYZ, this);
     sensor_range_sub = nh.subscribe("/sensor_range", 1, &Arm::moveDownCallBack, this);
+    switch_state_sub = nh.subscribe("/switch_state", 1, &Arm::switchStateCallback, this);
 
   }
 
@@ -150,6 +153,16 @@ public:
     }
     else if (msg->data == false){
       FLAG_MAGNET_ON = false;
+    }
+  }
+
+  void switchStateCallback(const std_msgs::Bool::ConstPtr& msg){
+    // keep track of the magnet state => allows arm to read data only when the magnet is on
+    if (msg->data == true){
+      FLAG_SWITCH_TOUCHED = true;
+    }
+    else if (msg->data == false){
+      FLAG_SWITCH_TOUCHED = false;
     }
   }
 
@@ -751,8 +764,7 @@ public:
 
   void moveDownCallBack(const std_msgs::Float32::ConstPtr& msg)
   {
-
-    if (msg->data >= THRESHOULD_DISTANCE)
+    while (FLAG_SWITCH_TOUCHED == false)
     {
       geometry_msgs::Pose target_pose = move_group.getCurrentPose().pose;
       std::vector<geometry_msgs::Pose> waypoints_down;
@@ -774,7 +786,7 @@ public:
 
 
       moveit_msgs::RobotTrajectory trajectory_down;
-      float eef_step_temp = 0.001;  // resolution of 1 mm
+      float eef_step_temp = 0.0001;  // resolution of 1 mm
       fraction = move_group.computeCartesianPath(waypoints_down, eef_step_temp, jump_threshold, trajectory_down);
       ROS_INFO_NAMED("tutorial", "Visualizing CartesianPath down (%.2f%% achieved)", fraction * 100.0);
       cartesian_plan.trajectory_ = trajectory_down;
@@ -784,10 +796,7 @@ public:
     #endif
 
       move_group.execute(cartesian_plan);
-    }else{
-      // Do Nothing
     }
-
   }
 
 
@@ -803,11 +812,11 @@ public:
     // +X: right
     // +Y: front
     // +Z: up
-    target_pose.position.x = msg->position.x;
-    target_pose.position.y = msg->position.y; // Measure DIST_CAM_TO_EE, see CONSTANT part
+    target_pose.position.x =  target_pose.position.x + msg->position.x;
+    target_pose.position.y =  target_pose.position.y - msg->position.y; // Measure DIST_CAM_TO_EE, see CONSTANT part
 
     // Measure DIST_CAM_TO_EE, see CONSTANT part => read button's position from camera, but we want to move EE to the button
-    target_pose.position.z = msg->position.z;
+    target_pose.position.z =  target_pose.position.z - msg->position.z;
     waypoints_down.push_back(target_pose);
 
     // Seong) Set planner, Max velo and Planning time
@@ -815,12 +824,12 @@ public:
     move_group.setPlanningTime(PLANNING_TIMEOUT);
     move_group.setGoalOrientationTolerance(0.01);
     move_group.setGoalPositionTolerance(0.01);
-//      move_group.setMaxVelocityScalingFactor(0.1);
-//      move_group.setMaxAccelerationScalingFactor(0.1);
+    move_group.setMaxVelocityScalingFactor(0.1);
+    move_group.setMaxAccelerationScalingFactor(0.1);
 
 
     moveit_msgs::RobotTrajectory trajectory_down;
-    fraction = move_group.computeCartesianPath(waypoints_down, eef_step, jump_threshold, trajectory_down);
+    fraction = move_group.computeCartesianPath(waypoints_down, 0.001, jump_threshold, trajectory_down);
     ROS_INFO_NAMED("tutorial", "Visualizing CartesianPath down (%.2f%% achieved)", fraction * 100.0);
     cartesian_plan.trajectory_ = trajectory_down;
 

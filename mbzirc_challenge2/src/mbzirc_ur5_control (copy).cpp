@@ -8,22 +8,24 @@
 #include <moveit_msgs/CollisionObject.h>
 
 #include <moveit_visual_tools/moveit_visual_tools.h>
-
-#include "ros/ros.h"
-#include "std_msgs/String.h"
 #include "std_msgs/Bool.h"
-#include "std_msgs/UInt32.h"
-#include "geometry_msgs/Point.h"
-#include "geometry_msgs/Pose.h"
+#include "std_msgs/UInt16.h"
+#include "std_msgs/Float32.h"
 #include <tf/transform_broadcaster.h>
 
-// #define DEBUG
+//#define DEBUG
 #define DELAY 1.0         // for sleep function => robot updating states => 0.4 s fail (?)
 #define END_EFFECTOR 0.07
-#define PLANNING_TIMEOUT 20
+#define PLANNING_TIMEOUT 2
 #define Z_OFFSET 0.105
-#define NUM_SUM 10 //20     // to average the pose msg
-#define NUM_DISCARD 5 // 10
+#define NUM_SUM 3      // to average the pose message
+#define NUM_DISCARD 10
+#define THRESHOULD_DISTANCE 0.02
+
+// CONSTANT 
+
+const double DIST_EE_TO_MAGNET = 0.0627;
+const double DIST_CAM_TO_EE = 0;
 
 namespace rvt = rviz_visual_tools;
 
@@ -31,33 +33,32 @@ namespace rvt = rviz_visual_tools;
 tf2::Quaternion q;
 
 // FLAG for robot motion
-bool FLAG_AT_DEFAULT = false;   // Is the arm at default position?
 
-bool FLAG_FINISH_PICK = false;  // Has the arm finished picking the brick? (brick attaches to magnet)
-bool FLAG_STORED = false;       // Is the brick already stored in on the UGV?
-
-bool FLAG_FINISH_STORING1 = true; // Is the arm storing the first object?
-bool FLAG_FINISH_STORING2 = true; // Is the arm storing the second object?
-bool FLAG_FINISH_UNLOAD = true;  // Is the arm unloading the object?
-
-bool FLAG_READ_CAM_DATA = true;    // Should the arm read msg from camera?
-bool FLAG_MAGNET_ON = true;      // Is the magnet on?
+bool FLAG_READ_CAM_DATA = false;    // Should the arm read message from camera?
 
 
 int gb_count_pose_msg = 0;
 int gb_discard_noise = 0;
+int gb_count_move = 0;  // 0 for moveXY, 1 for moveZ
 int gb_count_box = 0;
 float gb_x_sum = 0;
 float gb_y_sum = 0;
 float gb_z_sum = 0;
-float gb_yaw_sum = 0;
+float gb_xq_sum = 0;
+float gb_yq_sum = 0;
+float gb_zq_sum = 0;
+float gb_wq_sum = 0;
+bool FLAG_MAGNET_ON = true;      // Is the magnet on?
 
 
-// =============================== call back function ==================================== //
 class Arm{
 private:
   moveit::planning_interface::MoveGroupInterface::Plan my_plan;
   moveit::planning_interface::MoveGroupInterface::Plan cartesian_plan;
+  moveit::planning_interface::PlanningSceneInterface planning_scene_interface;
+
+  moveit_msgs::CollisionObject brick; // Define a collision object ROS message.
+
 
   // for checking success of planning
   bool success;
@@ -68,59 +69,78 @@ private:
   double PI = 3.141592653589793;
   double fraction;
 
-  ros::Subscriber pose_msg_from_cam;
-  ros::Subscriber pick_brick;
-  ros::Subscriber store_brick;
-  ros::Subscriber unload_brick;
-  ros::Subscriber magnet_state;
+  ros::Publisher moveToStorageSide_finished_flag_pub;
+  ros::Publisher moveToDefault_finished_flag_pub;
+  ros::Publisher avg_pose_pub;
+  ros::Publisher box_count_pub;
+  ros::Publisher magnet_state_pub;
 
-  ros::Publisher magnet_pub;
-  ros::Publisher pick_brick_pub;
-  ros::Publisher store_brick_pub;
-  ros::Publisher unload_brick_pub;
+  ros::Subscriber pose_from_cam_sub;
+  ros::Subscriber moveToStorageSide_flag_sub;
+  ros::Subscriber moveToDefault_flag_sub;
+  ros::Subscriber moveXYZ_sub;
+  ros::Subscriber readCamData_flag_sub;
+  ros::Subscriber manual_moveXVZ_sub;
+  ros::Subscriber magnet_state_sub;
+  ros::Subscriber sensor_range_sub;
 
   ros::NodeHandle nh_;
   ros::NodeHandle nh;
 
   moveit::planning_interface::MoveGroupInterface move_group;
-
   moveit_visual_tools::MoveItVisualTools visual_tools;
   moveit::core::RobotStatePtr current_state;
+  geometry_msgs::Pose target_pose;
+
+
   const robot_state::JointModelGroup* joint_model_group;
   Eigen::Isometry3d text_pose;
 
-  std_msgs::Bool magnet_msg;
-  std_msgs::Bool pick_brick_msg;
-  std_msgs::UInt32 store_brick_msg;
-  geometry_msgs::Pose unload_brick_msg; // absolute position w.r.t UR5 base
+  geometry_msgs::Pose avg_pose_msg; // absolute position w.r.t UR5 base
+
+  std_msgs::Bool moveToStorageSide_flag_msg;
+  std_msgs::Bool readCamData_flag_msg;
+  std_msgs::Bool moveToDefault_flag_msg;
+  std_msgs::UInt16 box_count_msg;
+  std_msgs::Bool magnet_state_msg;
+  std_msgs::Bool moveToStorageSide_finished_flag_msg;
+  std_msgs::Bool moveToDefault_finished_flag_msg;
 
 public:
 
   Arm():nh_("~"), move_group("manipulator"), visual_tools("base_link") {
 
-    std::string PLANNING_GROUP = "manipulator";
+    // Initialization
+    const std::string PLANNING_GROUP = "manipulator";
     moveit::planning_interface::MoveGroupInterface move_group(PLANNING_GROUP);
     current_state = move_group.getCurrentState();
 
-    magnet_msg.data = true;
-    pick_brick_msg.data = true;
+    // Turn on Magnet
+    magnet_state_msg.data = true;
+    magnet_state_pub.publish(magnet_state_msg);
+    ROS_INFO("MAGNET_ON");
 
     joint_model_group =
                 move_group.getCurrentState()->getJointModelGroup(PLANNING_GROUP);
     text_pose = Eigen::Isometry3d::Identity();
-
     initWall();
-    moveToDefault(true);  // Start at the default position
 
-    magnet_pub = nh.advertise<std_msgs::Bool>("/magnet_on", 1000);
-    pick_brick_pub = nh.advertise<std_msgs::Bool>("/pick_brick", 1000);
-    store_brick_pub = nh.advertise<std_msgs::UInt32>("/store_brick", 1000);
+    // Node Communications
 
-    // magnet_state = nh.subscribe("/magnet_on", 1000, &Arm::magnetStateCallBack, this);
-    // pick_brick = nh.subscribe("/pick_brick", 1000, &Arm::pickBrickCallBack, this);
-    pose_msg_from_cam = nh.subscribe("/brick_pose", 1000, &Arm::pickAtCallback, this);
-    // store_brick = nh.subscribe("/store_brick", 1000, &Arm::storeBrickCallBack, this);
-    // unload_brick = nh.subscribe("/unload_brick", 1000, &Arm::unLoadCallBack, this);
+    moveToStorageSide_finished_flag_pub = nh.advertise<std_msgs::Bool>("/moveToStorageSide_finish_flag", 10);
+    moveToDefault_finished_flag_pub = nh.advertise<std_msgs::Bool>("/moveToDefault_finish_flag", 10);
+    avg_pose_pub = nh.advertise<geometry_msgs::Pose>("/avg_pose", 10);
+    box_count_pub = nh.advertise<std_msgs::UInt16>("/box_count", 10);
+    magnet_state_pub = nh.advertise<std_msgs::Bool>("/magnet_on", 10);
+
+    pose_from_cam_sub = nh.subscribe("/bbox_pose", 10, &Arm::calcAvgCallback, this);
+    moveToStorageSide_flag_sub = nh.subscribe("/moveToStorageSide_flag", 10, &Arm::moveToStorageSideFlagCallback, this);
+    moveToDefault_flag_sub = nh.subscribe("/moveToDefault_flag", 10, &Arm::moveToDafaultFlagCallback, this);
+    moveXYZ_sub = nh.subscribe("/avg_pose", 10, &Arm::_moveXYZCallback, this);
+    readCamData_flag_sub = nh.subscribe("/readCamData_Flag", 100, &Arm::readCamDataFlagCallback, this);
+    manual_moveXVZ_sub = nh.subscribe("/manual_moveXVZ", 10, &Arm::manual_moveXYZ, this);
+    sensor_range_sub = nh.subscribe("/sensor_range", 1, &Arm::moveDownCallBack, this);
+
   }
 
   void magnetStateCallBack(const std_msgs::Bool::ConstPtr& msg){
@@ -133,361 +153,418 @@ public:
     }
   }
 
-  void pickBrickCallBack(const std_msgs::Bool::ConstPtr& msg){
-    // trigger the arm to start reading pose of the bricks from the camera
-    if (msg->data == true){
-      FLAG_READ_CAM_DATA = true;
-    }
-    else if (msg->data == false){
-      FLAG_READ_CAM_DATA = false;
-    }
-  }
 
-  void pickAtCallback(const geometry_msgs::Pose::ConstPtr& msg){
+  void calcAvgCallback(const geometry_msgs::Pose::ConstPtr& msg)
+  {
     // read the brick pose from the camera
     // then go and get it
+    if (FLAG_READ_CAM_DATA == true){
+      if (gb_count_pose_msg < NUM_SUM + NUM_DISCARD){
 
-    // z_offset 4 cm, y offset 3 cm
-    if (FLAG_READ_CAM_DATA == true && FLAG_MAGNET_ON == true){
-      // filtering
-      if (FLAG_AT_DEFAULT == true && gb_count_pose_msg < NUM_SUM){
-        if (gb_count_pose_msg <= NUM_DISCARD){
+        if (gb_count_pose_msg <= NUM_DISCARD){  // discard the initial steam data => garbage data
           gb_x_sum = 0;
           gb_y_sum = 0;
           gb_z_sum = 0;
-          gb_yaw_sum = 0;
+          gb_xq_sum = 0;
+          gb_yq_sum = 0;
+          gb_zq_sum = 0;
+          gb_wq_sum = 0;
         }
-        ROS_INFO("accum the data");
+
+        ROS_INFO("Accumulate the data");
         gb_x_sum += msg->position.x;
         gb_y_sum += msg->position.y;
         gb_z_sum += msg->position.z;
-        
-        tf::Quaternion q(
+        gb_xq_sum += msg->orientation.x;
+        gb_yq_sum += msg->orientation.y;
+        gb_zq_sum += msg->orientation.z;
+        gb_wq_sum += msg->orientation.w;
+
+        gb_count_pose_msg += 1;
+
+      }else{ // picking up should start from DEFAULT position
+        int n = NUM_SUM;
+        ROS_INFO("x = %lf, y = %lf, z = %lf", gb_x_sum/n, gb_y_sum/n, gb_z_sum/n);
+        avg_pose_msg.position.x = gb_x_sum/n;
+        avg_pose_msg.position.y = gb_y_sum/n;
+        avg_pose_msg.position.z = gb_z_sum/n;
+        avg_pose_msg.orientation.x = gb_xq_sum/n;
+        avg_pose_msg.orientation.y = gb_yq_sum/n;
+        avg_pose_msg.orientation.z = gb_zq_sum/n;
+        avg_pose_msg.orientation.w = gb_wq_sum/n;
+
+        avg_pose_pub.publish(avg_pose_msg);
+        gb_count_move += 1;
+
+
+        FLAG_READ_CAM_DATA = false;
+
+        gb_x_sum = 0;
+        gb_y_sum = 0;
+        gb_z_sum = 0;
+        gb_xq_sum = 0;
+        gb_yq_sum = 0;
+        gb_zq_sum = 0;
+        gb_wq_sum = 0;
+
+        gb_count_pose_msg = 0; // reset the counter of data to be averaged
+
+      }
+    }else{
+      // DON'T get the stream data from camera and clear garbage data
+      gb_x_sum = 0;
+      gb_y_sum = 0;
+      gb_z_sum = 0;
+      gb_xq_sum = 0;
+      gb_yq_sum = 0;
+      gb_zq_sum = 0;
+      gb_wq_sum = 0;
+    }
+  }
+
+  void _moveXYZCallback(const geometry_msgs::Pose::ConstPtr& msg)
+  {
+    if (gb_count_move == 0)
+    {
+      // Move XY position (image frame) to align with the button
+      // And simultaneously move down Z/2 at the same time (default pose is too high -> move XY only -> out of working space)
+      ROS_INFO("MOVE XY: x = %lf, y = %lf, z/2 = %lf", msg->position.x, msg->position.y, msg->position.z / 2);
+      #ifdef DEBUG
+      visual_tools.prompt("Press 'next' to go move XY");  // DEBUG remove if not NEEDED
+      #endif
+      moveFromCurrentState(msg->position.x, msg->position.y, msg->position.z / 2);
+      FLAG_READ_CAM_DATA = true;
+    }else if(gb_count_move == 1) // move in to push the button
+    {
+      // 3 steps
+      // Step 1: Rotate the magnetic panel
+      current_state = move_group.getCurrentState();
+      ros::Duration(0.5).sleep();
+      current_state = move_group.getCurrentState();
+      // Next get the current set of joint values for the group.
+      std::vector<double> joint_group_positions;
+      current_state->copyJointGroupPositions(joint_model_group, joint_group_positions);
+
+      // convert quaternion to roll, pitch, yaw
+
+      tf::Quaternion q_temp(
+          // Note that norm of this Quaternion needs to be ONE
+          // Otherwise, it's inaccurate.
           msg->orientation.x,
           msg->orientation.y,
           msg->orientation.z,
           msg->orientation.w
-        );
+          );
 
-        tf::Matrix3x3 m(q);
-        double roll, pitch, yaw;
-        m.getRPY(roll,pitch,yaw);
-        
-        if (yaw<0)
-          yaw += PI;
-        if (yaw>PI/2)
-          yaw = -(PI-yaw);
-        gb_yaw_sum += yaw;
-        gb_count_pose_msg += 1;
-      }else if(FLAG_AT_DEFAULT == true &&
-                FLAG_FINISH_UNLOAD == true && FLAG_FINISH_STORING1 == true &&
-                FLAG_FINISH_STORING2 == true){ // picking up should start from DEFAULT position
-        int n = NUM_SUM - NUM_DISCARD;
-        ROS_INFO("x = %lf, y = %lf, z =%lf", gb_x_sum/n, gb_y_sum/n, gb_z_sum/n);
-        FLAG_AT_DEFAULT = false;
-        #ifdef DEBUG
-          visual_tools.prompt("Press 'next' to go to get bricks");
-        #endif
-        moveit::core::RobotStatePtr current_state = move_group.getCurrentState();
-        // Next get the current set of joint values for the group.
-        std::vector<double> joint_group_positions;
-        current_state->copyJointGroupPositions(joint_model_group, joint_group_positions);
-        // Now, let's modify one of the joints, plan to the new joint space goal and visualize the plan.
-        // rotate left 90 Deg to store bricks
-        joint_group_positions[5] += gb_yaw_sum/n;  // radians
-        ROS_INFO("yaw = %f", gb_yaw_sum/n*180./PI);
-        move_group.setJointValueTarget(joint_group_positions);
-        move_group.setPlanningTime(PLANNING_TIMEOUT);
-        move_group.setMaxVelocityScalingFactor(0.1); // Cartesian motions are needed to be slower
+      tf::Matrix3x3 m(q_temp);
+      double roll, pitch, yaw;
+      m.getRPY(roll, pitch, yaw);
 
-        success = (move_group.plan(my_plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS);
-        ROS_INFO_NAMED("tutorial", "Visualizing Initial joint plan (joint space goal) %s", success ? "" : "FAILED");
+      if (yaw < 0)
+        yaw += PI;
+      if (yaw > PI/2)
+        yaw = -(PI-yaw);
 
-        // Visualize the plan in RViz
-        visual_tools.deleteAllMarkers();
-        visual_tools.publishText(text_pose, "Joint Space Goal", rvt::WHITE, rvt::XLARGE);
-        visual_tools.publishTrajectoryLine(my_plan.trajectory_, joint_model_group);
-        visual_tools.trigger();
+      ROS_INFO("Roll = %f, Pitch = %f, Yaw = %f", roll*180./PI, pitch*180./PI, yaw*180./PI);
 
-        #ifdef DEBUG
-            visual_tools.prompt("Press 'next' to front position");
-        #endif
+      joint_group_positions[5] += yaw;  // radians
+      move_group.setJointValueTarget(joint_group_positions);
+      move_group.setPlanningTime(PLANNING_TIMEOUT);
+      move_group.setGoalJointTolerance(0.01);
 
-        move_group.move(); //move to storage on left side
-        ros::Duration(2*DELAY).sleep();           // wait for robot to update current state otherwise failed
+      success = (move_group.plan(my_plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS);
+      ROS_INFO_NAMED("tutorial", "Visualizing Initial joint plan (joint space goal) %s", success ? "" : "FAILED");
+      // Visualize the plan in RViz
+      visual_tools.deleteAllMarkers();
+      visual_tools.publishText(text_pose, "Joint Space Goal", rvt::WHITE, rvt::XLARGE);
+      visual_tools.publishTrajectoryLine(my_plan.trajectory_, joint_model_group);
+      visual_tools.trigger();
 
 
+      ROS_INFO("yaw = %f", yaw*180./PI);
+      #ifdef DEBUG
+          visual_tools.prompt("Press 'next' to front position"); // DEBUG remove if not NEEDED
+      #endif
+      move_group.move(); //move to storage on left side
+
+      // Step 2: Move down to get the brick
+      // XY should already be aligned
+      ROS_INFO("MOVE Z: z = %lf", msg->position.z);
+      #ifdef DEBUG
+      visual_tools.prompt("Press 'next' to go move XY");  // DEBUG remove if not NEEDED
+      #endif
+      moveFromCurrentState(0, 0, msg->position.z);
+      attachBrick();
+
+      // Step 3: Move back to default position, preparing to store the brick on the UGV
+      FLAG_READ_CAM_DATA = false; // Disable reading box pose data stream
+      gb_count_move = 0;
+      moveToDefault();
+      moveToDefault_finished_flag_msg.data = true;
+      moveToDefault_finished_flag_pub.publish(moveToDefault_finished_flag_msg); // let the planner know that the arm is at default position
+
+    }
+
+  }
 
 
-        moveFromCurrentState(gb_x_sum/n, gb_y_sum/n, gb_z_sum/n, true);
-        gb_count_box += 1;
-
-        gb_count_pose_msg = 0;
-        gb_x_sum = 0;
-        gb_y_sum = 0;
-        gb_z_sum = 0;
-        gb_yaw_sum = 0;
-        magnet_msg.data = true;
-        magnet_pub.publish(magnet_msg); // MAGNET ON
-        ROS_INFO("MAGNET_ON");
-        ros::Duration(1.).sleep();
-        magnet_msg.data = true;
-        magnet_pub.publish(magnet_msg); // MAGNET ON
-        ROS_INFO("MAGNET_ON");
-        ros::Duration(1.).sleep();
-        // moveToDefault(true);
-        moveToFront();
-        FLAG_READ_CAM_DATA = false;
-        // finish picking up => call the store
-        store_brick_msg.data = gb_count_box;
-        store_brick_pub.publish(store_brick_msg); // store the brick on UGV
-        ROS_INFO("StoreBrickCallBack");
-        storeOnUGV(7);
-      }
+  void readCamDataFlagCallback(const std_msgs::Bool::ConstPtr& msg)
+  {
+    if (msg->data == true){
+      FLAG_READ_CAM_DATA = true;
     }else{
-      // don't get the stream data from camera and clear garbage data
-      gb_count_pose_msg = 0;
-      gb_x_sum = 0;
-      gb_y_sum = 0;
-      gb_z_sum = 0;
+      FLAG_READ_CAM_DATA = false;
     }
   }
 
-  void storeBrickCallBack(const std_msgs::UInt32::ConstPtr& msg){
-      // store the brick on UGV
-      pick_brick_msg.data = false;
-      pick_brick_pub.publish(pick_brick_msg); // Stop reading camera msg until we turn it on again
+  void moveToStorageSideFlagCallback(const std_msgs::Bool::ConstPtr& msg)
+  {
+    // Subscribe: moveToStorageSide_flag_msg
+    // Publish: moveToStorageSide_finished_flag_msg
+    if (msg->data == true){
+      gb_count_box += 1;
+      moveToStorageSide12(gb_count_box);
 
-      ROS_INFO("StoreBrickCallBack");
-      storeOnUGV(msg->data);
-      // moveTo()
-  }
+      magnet_state_msg.data = false;
+      magnet_state_pub.publish(magnet_state_msg); // MAGNET OFF
+      ROS_INFO("MAGNET_OFF");
+      detachBrick();
 
-  void unLoadCallBack(const geometry_msgs::Pose::ConstPtr& msg){
-      // unLoad the box according to
-      if (FLAG_FINISH_UNLOAD == true){
-          FLAG_FINISH_UNLOAD = false;  // should set this FLAG when unloading
-          unloadTo(msg->position.x,msg->position.y,msg->position.z, gb_count_box);
-          gb_count_box -= 1;
-          FLAG_FINISH_UNLOAD = true;   // should set this FLAG when finishing unloading
+      moveToStorageSide_finished_flag_msg.data = true;
+      moveToStorageSide_finished_flag_pub.publish(moveToStorageSide_finished_flag_msg);
+
+      box_count_msg.data = gb_count_box;
+      box_count_pub.publish(box_count_msg); // Publish the number of boxes in the container after storing
+
+      moveToDefault();
+      magnet_state_msg.data = true;
+      magnet_state_pub.publish(magnet_state_msg); // MAGNET OFF
+      ROS_INFO("MAGNET_ON");
+      moveToDefault_finished_flag_msg.data = true;
+      moveToDefault_finished_flag_pub.publish(moveToDefault_finished_flag_msg); // let the planner know that the arm is up
+
+      if(gb_count_box == 5){ // Can only store 5 layers in the container
+        gb_count_box = 0;
       }
+    }else{
+      // DO NOTHING
+    }
   }
 
-  void initWall() {
+  void moveToDafaultFlagCallback(const std_msgs::Bool::ConstPtr& msg)
+  {
+    // Subscribe: moveToDefault_flag
+    // Publish: moveToDefault_finish_flag
+    if (msg->data == true){
+      moveToDefault();
+      moveToDefault_finished_flag_msg.data = true;
+      moveToDefault_finished_flag_pub.publish(moveToDefault_finished_flag_msg); // let the planner know that the arm is up
 
-      // Seong) Set planner, Max velo and Planning time
-      move_group.setPlannerId("RRTConnectkConfigDefault");
-      move_group.setMaxVelocityScalingFactor(0.1);
-      move_group.setPlanningTime(PLANNING_TIMEOUT);
-
-      // class to add and remove collision objects in our "virtual world" scene
-      moveit::planning_interface::PlanningSceneInterface planning_scene_interface;
-
-      // Raw pointers are frequently used to refer to the planning group for improved performance.
-      // ================================== Visualization ======================================= //
-      // The package MoveItVisualTools provides many capabilties for visualizing objects, robots,
-      // and trajectories in RViz as well as debugging tools such as step-by-step introspection of a script
-
-      visual_tools.deleteAllMarkers();
-
-      // Remote control is an introspection tool that allows users to step through a high level script
-      // via buttons and keyboard shortcuts in RViz
-      visual_tools.loadRemoteControl();
-
-      // RViz provides many types of markers, in this demo we will use text, cylinders, and spheres
-
-      text_pose.translation().z() = 1.75;
-      visual_tools.publishText(text_pose, "MoveGroupInterface Demo", rvt::WHITE, rvt::XLARGE);
-
-      // Batch publishing is used to reduce the number of messages being sent to RViz for large visualizations
-      visual_tools.trigger();
-
-      // ============================== Set Robot Body Collision ============================== //
-
-      // ---------- UGV_base + Side storage area
-      moveit_msgs::CollisionObject UGV_base; // Define a collision object ROS message.
-      UGV_base.header.frame_id = move_group.getPlanningFrame();
-
-      UGV_base.id = "UGV_base"; // The id of the object is used to identify it.
-
-      shape_msgs::SolidPrimitive primitive_UGV_base; // Define UGV_base dimension (in meter)
-      primitive_UGV_base.type = primitive_UGV_base.BOX;
-      primitive_UGV_base.dimensions.resize(3);
-      primitive_UGV_base.dimensions[0] = 0.66;  // x right
-      primitive_UGV_base.dimensions[1] = 0.55;  // y front
-      primitive_UGV_base.dimensions[2] = 0.26;  // z up
-
-      geometry_msgs::Pose pose_UGV_base; // Define a pose for the Robot_bottom (specified relative to frame_id)
-      q.setRPY(0, 0, 0);      // 90 deg
-      pose_UGV_base.orientation.x = q[0];
-      pose_UGV_base.orientation.y = q[1];
-      pose_UGV_base.orientation.z = q[2];
-      pose_UGV_base.orientation.w = q[3];
-      pose_UGV_base.position.x =  -0.09;
-      pose_UGV_base.position.y = -0.06;
-      pose_UGV_base.position.z = -primitive_UGV_base.dimensions[2]/2;
-
-      UGV_base.primitives.push_back(primitive_UGV_base);
-      UGV_base.primitive_poses.push_back(pose_UGV_base);
-      UGV_base.operation = UGV_base.ADD;
-
-      // ---------- Magnet Panel at end effector
-      // moveit_msgs::CollisionObject magnet_panel; // Define a collision object ROS message.
-      // magnet_panel.header.frame_id = move_group.getEndEffectorLink(); // reference to end-effector frame
-      // magnet_panel.id = "magnet_panel"; // The id of the object is used to identify it.
-
-      // shape_msgs::SolidPrimitive primitive_magnet_panel; // Define UGV_body dimension (in meter)
-      // primitive_magnet_panel.type = primitive_magnet_panel.BOX;
-      // primitive_magnet_panel.dimensions.resize(3);
-      // primitive_magnet_panel.dimensions[0] = 0.035;  // length (x)
-      // primitive_magnet_panel.dimensions[1] = 0.42;  // width  (y)
-      // primitive_magnet_panel.dimensions[2] = 0.065;  // height (z)
-
-
-      // geometry_msgs::Pose pose_magnet_panel; // Define a pose for the UGV_body (specified relative to frame_id)
-      // q.setRPY(0, 0, 0);
-      // pose_magnet_panel.orientation.x = q[0];
-      // pose_magnet_panel.orientation.y = q[1];
-      // pose_magnet_panel.orientation.z = q[2];
-      // pose_magnet_panel.orientation.w = q[3];
-      // pose_magnet_panel.position.x = primitive_magnet_panel.dimensions[0]/2;
-      // pose_magnet_panel.position.y = 0;
-      // pose_magnet_panel.position.z = 0;
-
-      // magnet_panel.primitives.push_back(primitive_magnet_panel);
-      // magnet_panel.primitive_poses.push_back(pose_magnet_panel);
-      // magnet_panel.operation = magnet_panel.ADD;
-
-      // ---------- Collect Whole Robot Body
-      std::vector<moveit_msgs::CollisionObject> collision_robot_body;
-      // collision_robot_body.push_back(magnet_panel);
-      collision_robot_body.push_back(UGV_base);
-      planning_scene_interface.addCollisionObjects(collision_robot_body); //add the collision object into the world
-      ros::Duration(DELAY).sleep(); // wait to build the object before attaching to ee
-
-      // move_group.attachObject(magnet_panel.id); // attach the magnet panel to end-effector
+    }else{
+      // DO NOTHING
+    }
   }
 
-  void moveToFront(){
+  void moveToFront()
+  {
 
-    moveit::core::RobotStatePtr current_state = move_group.getCurrentState();
-    //
+    current_state = move_group.getCurrentState();
+    ros::Duration(0.5).sleep();
+    current_state = move_group.getCurrentState();
+
     // Next get the current set of joint values for the group.
     std::vector<double> joint_group_positions;
     current_state->copyJointGroupPositions(joint_model_group, joint_group_positions);
 
     joint_group_positions[0] = PI/2;  // radians
     joint_group_positions[1] = -PI/2;  // radians
-    joint_group_positions[2] = PI/4;  // radians
-    joint_group_positions[3] = 315.*PI/180.;  // radians
+    joint_group_positions[2] = PI/2;  // radians
+    joint_group_positions[3] = PI;  // radians
     joint_group_positions[4] = -PI/2;  // radians
-    joint_group_positions[5] = PI/4.;  // radians
+    joint_group_positions[5] = 0;  // radians
     move_group.setJointValueTarget(joint_group_positions);
     move_group.setPlanningTime(PLANNING_TIMEOUT);
-    move_group.setMaxVelocityScalingFactor(0.1);
+    move_group.setGoalJointTolerance(0.01);
+//    move_group.setMaxVelocityScalingFactor(0.5);
 
     success = (move_group.plan(my_plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS);
     ROS_INFO_NAMED("tutorial", "Visualizing Initial joint plan (joint space goal) %s", success ? "" : "FAILED");
-
-    // Visualize the plan in RViz
-    visual_tools.deleteAllMarkers();
-    visual_tools.publishText(text_pose, "Joint Space Goal", rvt::WHITE, rvt::XLARGE);
-    visual_tools.publishTrajectoryLine(my_plan.trajectory_, joint_model_group);
-    visual_tools.trigger();
 
   #ifdef DEBUG
     visual_tools.prompt("Press 'next' to front position");
   #endif
 
-    move_group.move();                      // move to default position, arm in front of the robot
-    ros::Duration(DELAY).sleep();           // wait for robot to update current state otherwise failed
+    move_group.move();                      // BLOCKING FUNCTION
+//    ros::Duration(DELAY).sleep();           // wait for robot to update current state otherwise failed
+  }
 
-    FLAG_AT_DEFAULT = false;
-    };
+  void moveToDefault()
+  {
 
-  void moveToDefault(bool setFlag){
-    if (FLAG_AT_DEFAULT == false){
-      moveit::core::RobotStatePtr current_state = move_group.getCurrentState();
-      //
+      current_state = move_group.getCurrentState();
+      ros::Duration(0.5).sleep();
+      current_state = move_group.getCurrentState();
       // Next get the current set of joint values for the group.
       std::vector<double> joint_group_positions;
       current_state->copyJointGroupPositions(joint_model_group, joint_group_positions);
 
-      moveToFront();
+      joint_group_positions[0] = PI/2;  // Radian
+      joint_group_positions[1] = -PI/2;
+      joint_group_positions[2] = PI/4;
+      joint_group_positions[3] = 2 * PI - PI/4;
+      joint_group_positions[4] = -PI/2;
+      joint_group_positions[5] = PI/4;
+      move_group.setJointValueTarget(joint_group_positions);
+      move_group.setMaxVelocityScalingFactor(0.3);
+      move_group.setMaxAccelerationScalingFactor(0.3);
+      move_group.setPlanningTime(PLANNING_TIMEOUT);
+      move_group.setGoalJointTolerance(0.01);
+//      move_group.setMaxVelocityScalingFactor(0.5);
+//      move_group.setMaxAccelerationScalingFactor(0.5);
 
-      robot_state::RobotState init_state(*move_group.getCurrentState()); // save init state
-      geometry_msgs::Pose target_pose3 = move_group.getCurrentPose().pose;
-
-      // ========== Cartesian Paths up ========== //
-
-    //   std::vector<geometry_msgs::Pose> waypoints_up;
-    //   target_pose3 = move_group.getCurrentPose().pose; // Cartesian Path from the current position
-    //   waypoints_up.push_back(target_pose3);
-
-    //   target_pose3.position.z += 0.28;        // up to default position => the highest we can go ~140 cm
-    //   waypoints_up.push_back(target_pose3);   // back to the position before going down
-
-    //   move_group.setMaxVelocityScalingFactor(0.1); // Cartesian motions are needed to be slower
-
-    //   // We want the Cartesian path to be interpolated at a resolution of 1 cm
-    //   moveit_msgs::RobotTrajectory trajectory_up;
-
-    //   fraction = move_group.computeCartesianPath(waypoints_up, eef_step, jump_threshold, trajectory_up);
-    //   ROS_INFO_NAMED("tutorial", "Visualizing CartesianPath up (%.2f%% acheived)", fraction * 100.0);
-
-    //   cartesian_plan.trajectory_ = trajectory_up;
-
-    //   // Visualize the plan in RViz
-    //   visual_tools.deleteAllMarkers();
-    //   visual_tools.publishText(text_pose, "Joint Space Goal", rvt::WHITE, rvt::XLARGE);
-    //   visual_tools.publishPath(waypoints_up, rvt::LIME_GREEN, rvt::SMALL);
-    //   for (std::size_t i = 0; i < waypoints_up.size(); ++i)
-    //     visual_tools.publishAxisLabeled(waypoints_up[i], "pt" + std::to_string(i), rvt::SMALL);
-    //   visual_tools.trigger();
+      success = (move_group.plan(my_plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS);
+      ROS_INFO_NAMED("tutorial", "Visualizing Initial joint plan (joint space goal) %s", success ? "SUCCEEDED" : "FAILED");
 
     #ifdef DEBUG
-      visual_tools.prompt("Press 'next' to go to default position");
+      visual_tools.prompt("Press 'next' to front position");
     #endif
-      move_group.execute(cartesian_plan);
-      if (setFlag == true){
-        FLAG_AT_DEFAULT = true;
-      }
-      ros::Duration(3*DELAY).sleep(); //sleep to wait for stable msg from camera
 
-    }else{
-      // do nothing if it's already at the default position
-      ROS_INFO("moveToDefault: already at the default position");
-    }
+      move_group.move();                      // BLOCKING FUNCTION
+  //    ros::Duration(DELAY).sleep();           // wait for robot to update current state otherwise failed
 
-  };
+  }
 
-  void moveFromCurrentState(float toX, float toY, float toZ, bool isPicking){
+  void moveToStorageSide12(uint box_count)
+  {
+    // STEP1: Rotate Up
+    current_state = move_group.getCurrentState();
+    ros::Duration(0.5).sleep();
+    current_state = move_group.getCurrentState();
+    
+    //
+    // Next get the current set of joint values for the group.
+    std::vector<double> joint_group_positions;
+    current_state->copyJointGroupPositions(joint_model_group, joint_group_positions);
 
-    geometry_msgs::Pose target_pose = move_group.getCurrentPose().pose;
+    joint_group_positions[2] = PI/6;
+    joint_group_positions[3] = PI;
+
+    move_group.setJointValueTarget(joint_group_positions);
+    move_group.setPlanningTime(PLANNING_TIMEOUT);
+    move_group.setMaxVelocityScalingFactor(0.3);
+    move_group.setMaxAccelerationScalingFactor(0.3);
+    move_group.setGoalJointTolerance(0.01);
+
+    success = (move_group.plan(my_plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS);
+    ROS_INFO_NAMED("tutorial", "moveToStorageSide Step 1: rotate up %s", success ? "SUCCEEDED" : "FAILED");
+
+
+  #ifdef DEBUG
+    visual_tools.prompt("Press 'next' to front position");
+  #endif
+
+    move_group.move();                      // BLOCKING FUNCTION
+
+    // STEP2: Turn Left (UGV view)
+    current_state = move_group.getCurrentState();
+    ros::Duration(0.5).sleep();
+    current_state = move_group.getCurrentState();
+    current_state->copyJointGroupPositions(joint_model_group, joint_group_positions);
+
+    joint_group_positions[0] = PI/2 + PI/2;  // Radian rotate 90 from Default Position
+
+    move_group.setJointValueTarget(joint_group_positions);
+    move_group.setPlanningTime(PLANNING_TIMEOUT);
+    move_group.setGoalJointTolerance(0.01);
+
+    ROS_INFO_NAMED("tutorial", "moveToStorageSide Step 2: Turn left %s", success ? "SUCCEEDED" : "FAILED");
+
+
+    #ifdef DEBUG
+      visual_tools.prompt("Press 'next' to front position");
+    #endif
+
+    move_group.move();                      // BLOCKING FUNCTION
+
+    // STEP3: Rotate Down
+    current_state = move_group.getCurrentState();
+    ros::Duration(0.5).sleep();
+    current_state = move_group.getCurrentState();
+    current_state->copyJointGroupPositions(joint_model_group, joint_group_positions);
+
+    joint_group_positions[3] = 2*PI - joint_group_positions[2];  // Make the brick face downward
+    joint_group_positions[4] = -PI/2;
+    joint_group_positions[5] = PI/4;
+
+    move_group.setJointValueTarget(joint_group_positions);
+    move_group.setMaxVelocityScalingFactor(0.3);
+    move_group.setMaxAccelerationScalingFactor(0.3);
+    move_group.setPlanningTime(PLANNING_TIMEOUT);
+    move_group.setGoalJointTolerance(0.001);
+
+    success = (move_group.plan(my_plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS);
+    ROS_INFO_NAMED("tutorial", "moveToStorageSide Step 3: Rotate Down %s", success ? "SUCCEEDED" : "FAILED");
+
+    #ifdef DEBUG
+      visual_tools.prompt("Press 'next' to front position");
+    #endif
+
+    move_group.move();                      // BLOCKING FUNCTION
+
+    // STEP4: Go to the storage
+    
+    std::vector<geometry_msgs::Pose> waypoints_to_storage;
+    
+    target_pose = move_group.getCurrentPose().pose; // Cartesian Path from the current position
+    ros::Duration(0.5).sleep();
+    target_pose = move_group.getCurrentPose().pose; // Cartesian Path from the current position
+
+//    waypoints_to_storage.push_back(target_pose);
+    target_pose.position.x = -0.58;
+    target_pose.position.y = -0.1;
+    target_pose.position.z = 0.65;
+
+    waypoints_to_storage.push_back(target_pose);
+
+    move_group.setMaxVelocityScalingFactor(0.1);
+    move_group.setMaxAccelerationScalingFactor(0.1);
+    move_group.setPlanningTime(PLANNING_TIMEOUT);
+
+    moveit_msgs::RobotTrajectory trajectory_to_storage;
+    fraction = move_group.computeCartesianPath(waypoints_to_storage, eef_step, jump_threshold, trajectory_to_storage);
+    ROS_INFO_NAMED("tutorial", "moveToStorageSide Step 4: Cartesian To Storage (%.2f%% achieved)", fraction * 100.0);
+    cartesian_plan.trajectory_ = trajectory_to_storage;
+
+    // Visualize the plan in RViz
+    visual_tools.deleteAllMarkers();
+    visual_tools.publishText(text_pose, "Joint Space Goal", rvt::WHITE, rvt::XLARGE);
+    visual_tools.publishPath(waypoints_to_storage, rvt::LIME_GREEN, rvt::SMALL);
+    for (std::size_t i = 0; i < waypoints_to_storage.size(); ++i)
+      visual_tools.publishAxisLabeled(waypoints_to_storage[i], "pt" + std::to_string(i), rvt::SMALL);
+    visual_tools.trigger();
+
+    #ifdef DEBUG
+      visual_tools.prompt("Press 'next' to go down");
+    #endif
+
+    move_group.execute(cartesian_plan);
+
+    // STEP5: Move Down
     std::vector<geometry_msgs::Pose> waypoints_down;
     target_pose = move_group.getCurrentPose().pose; // Cartesian Path from the current position
+    ros::Duration(0.5).sleep();
+    target_pose = move_group.getCurrentPose().pose; // Cartesian Path from the current position
+//    waypoints_down.push_back(target_pose);
+    target_pose.position.z = -0.25 + (box_count - 1) * 0.20;
     waypoints_down.push_back(target_pose);
 
-    if (isPicking == true){
-      target_pose.position.x += (toX);                  // #######################################################################################################
-      target_pose.position.y += (toY-0.03);           // #######################################################################################################
-      target_pose.position.z += (-1.07+0.05); // 0.05 // + up  // #######################################################################################################
-      waypoints_down.push_back(target_pose);    // back to the position before going down
-    }else{
-      target_pose.position.x += toX; // + right
-      target_pose.position.y += toY; // + front
-      target_pose.position.z += toZ; // + up
-      waypoints_down.push_back(target_pose);    // back to the position before going down
-    }
+    move_group.setMaxVelocityScalingFactor(0.1);
+    move_group.setMaxAccelerationScalingFactor(0.1);
+    move_group.setPlanningTime(PLANNING_TIMEOUT);
 
-    move_group.setMaxVelocityScalingFactor(0.07); // Cartesian motions are needed to be slower
-
-    // We want the Cartesian path to be interpolated at a resolution of 1 cm
     moveit_msgs::RobotTrajectory trajectory_down;
-
     fraction = move_group.computeCartesianPath(waypoints_down, eef_step, jump_threshold, trajectory_down);
-    ROS_INFO_NAMED("tutorial", "Visualizing CartesianPath down (%.2f%% acheived)", fraction * 100.0);
-
+    ROS_INFO_NAMED("tutorial", "moveToStorageSide Step 5: Go down (%.2f%% achieved)", fraction * 100.0);
     cartesian_plan.trajectory_ = trajectory_down;
 
     // Visualize the plan in RViz
@@ -498,199 +575,497 @@ public:
       visual_tools.publishAxisLabeled(waypoints_down[i], "pt" + std::to_string(i), rvt::SMALL);
     visual_tools.trigger();
 
-  #ifdef DEBUG
-    visual_tools.prompt("Press 'next' to go down");
-    ros::Duration(DELAY).sleep();
-  #endif
-
-    move_group.execute(cartesian_plan);
-    ros::Duration(DELAY).sleep();           // wait for robot to update current state otherwise failed
-
-    if (isPicking == true){     // to inform that robot has done picking job
-      FLAG_FINISH_PICK = true;
-      ros::Duration(2*DELAY).sleep();
-    }else{
-      FLAG_FINISH_PICK = false;
-    }
-
-    FLAG_AT_DEFAULT = false;
-  };
-
-  void moveTo(float toX, float toY, float toZ){
-
-    geometry_msgs::Pose target_pose = move_group.getCurrentPose().pose;
-    std::vector<geometry_msgs::Pose> waypoints_To;
-    target_pose = move_group.getCurrentPose().pose; // Cartesian Path from the current position
-    waypoints_To.push_back(target_pose);
-
-    target_pose.position.x = toX; // + right
-    target_pose.position.y = toY; // + front
-    target_pose.position.z = toZ; // + up
-
-    waypoints_To.push_back(target_pose);    // back to the position before going down
-
-    move_group.setMaxVelocityScalingFactor(0.1); // Cartesian motions are needed to be slower
-
-    // We want the Cartesian path to be interpolated at a resolution of 1 cm
-    moveit_msgs::RobotTrajectory trajectory_down;
-
-    fraction = move_group.computeCartesianPath(waypoints_To, eef_step, jump_threshold, trajectory_down);
-    ROS_INFO_NAMED("tutorial", "Visualizing CartesianPath down (%.2f%% acheived)", fraction * 100.0);
-
-    cartesian_plan.trajectory_ = trajectory_down;
-
-    // Visualize the plan in RViz
-    visual_tools.deleteAllMarkers();
-    visual_tools.publishText(text_pose, "Joint Space Goal", rvt::WHITE, rvt::XLARGE);
-    visual_tools.publishPath(waypoints_To, rvt::LIME_GREEN, rvt::SMALL);
-    for (std::size_t i = 0; i < waypoints_To.size(); ++i)
-      visual_tools.publishAxisLabeled(waypoints_To[i], "pt" + std::to_string(i), rvt::SMALL);
-    visual_tools.trigger();
-
-  #ifdef DEBUG
-    visual_tools.prompt("Press 'next' to go down");
-    ros::Duration(DELAY).sleep();
-  #endif
-
-    move_group.execute(cartesian_plan);
-    ros::Duration(2*DELAY).sleep();           // wait for robot to update current state otherwise failed
-
-    FLAG_AT_DEFAULT = false;
-  };
-
-  void moveToStorage(){
-
-    moveToDefault(false);
-    // assume we are at default position
-    moveit::core::RobotStatePtr current_state = move_group.getCurrentState();
-    // Next get the current set of joint values for the group.
-    std::vector<double> joint_group_positions;
-    current_state->copyJointGroupPositions(joint_model_group, joint_group_positions);
-    // Now, let's modify one of the joints, plan to the new joint space goal and visualize the plan.
-    // rotate left 90 Deg to store bricks
-    joint_group_positions[0] = PI;  // radians
-    move_group.setJointValueTarget(joint_group_positions);
-    move_group.setPlanningTime(PLANNING_TIMEOUT);
-    move_group.setMaxVelocityScalingFactor(0.1); // Cartesian motions are needed to be slower
-
-    success = (move_group.plan(my_plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS);
-    ROS_INFO_NAMED("tutorial", "Visualizing Initial joint plan (joint space goal) %s", success ? "" : "FAILED");
-
-    // Visualize the plan in RViz
-    visual_tools.deleteAllMarkers();
-    visual_tools.publishText(text_pose, "Joint Space Goal", rvt::WHITE, rvt::XLARGE);
-    visual_tools.publishTrajectoryLine(my_plan.trajectory_, joint_model_group);
-    visual_tools.trigger();
-
     #ifdef DEBUG
-        visual_tools.prompt("Press 'next' to front position");
+      visual_tools.prompt("Press 'next' to go down");
     #endif
 
-    move_group.move(); //move to storage on left side
-    ros::Duration(2*DELAY).sleep();           // wait for robot to update current state otherwise failed
-
-
-    FLAG_AT_DEFAULT = false;
-  };
-
-  void storeOnUGV(int count){
-    ROS_INFO("Storing: count = %d", count);
-    FLAG_STORED = true;
-    // moveToStorage();
-
-    // geometry_msgs::Pose target_pose = move_group.getCurrentPose().pose;
-    // target_pose = move_group.getCurrentPose().pose;
-    // if (count == 1){
-    //   moveTo(-0.35, target_pose.position.y, 0.345); // bring arm backward and down      // #######################################################################################################
-    // }else if (count == 2){
-    //   moveTo(-0.35, target_pose.position.y, 0.345 + 0.22); // bring arm backward and down // #######################################################################################################
-    // }
-    moveit::core::RobotStatePtr current_state = move_group.getCurrentState();
-    //
-    // Next get the current set of joint values for the group.
-    std::vector<double> joint_group_positions;
-    current_state->copyJointGroupPositions(joint_model_group, joint_group_positions);
-
-    joint_group_positions[0] = -PI/2;  // radians
-    joint_group_positions[1] = -120.*PI/180.;  // radians
-    joint_group_positions[2] = 120.*PI/180.;  // radians
-    joint_group_positions[3] = 270.*PI/180.;  // radians
-    joint_group_positions[4] = -PI/2;  // radians
-    joint_group_positions[5] = PI/4.;  // radians
-    move_group.setJointValueTarget(joint_group_positions);
-    move_group.setPlanningTime(PLANNING_TIMEOUT);
-    move_group.setMaxVelocityScalingFactor(0.3);
-
-    success = (move_group.plan(my_plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS);
-    ROS_INFO_NAMED("tutorial", "Visualizing Initial joint plan (joint space goal) %s", success ? "" : "FAILED");
-
-    // Visualize the plan in RViz
-    visual_tools.deleteAllMarkers();
-    visual_tools.publishText(text_pose, "Joint Space Goal", rvt::WHITE, rvt::XLARGE);
-    visual_tools.publishTrajectoryLine(my_plan.trajectory_, joint_model_group);
-    visual_tools.trigger();
-
-  #ifdef DEBUG
-    visual_tools.prompt("Press 'next' to front position");
-  #endif
-
-    move_group.move();                      // move to default position, arm in front of the robot
-    ros::Duration(DELAY).sleep();           // wait for robot to update current state otherwise failed
-
-    FLAG_AT_DEFAULT = false;
-
-    
-    magnet_msg.data = false;
-    magnet_pub.publish(magnet_msg); // MAGNET OFF
-    ROS_INFO("MAGNET_OFF");
-    ros::Duration(3.).sleep();           // wait for robot to update current state otherwise failed
-    // go back to default position after finishing storing the bricks
-    moveToDefault(true);
-
-    // magnet_msg.data = true;
-    // magnet_pub.publish(magnet_msg); // MAGNET ON
-    // ROS_INFO("MAGNET_ON");
-
-    FLAG_STORED = false;
-    FLAG_FINISH_PICK = false;
-  };
-
-  void unloadTo(float atX, float atY, float atZ, int count){
-    ROS_INFO("unloadTo");
-
-    // unload to absolute coordinate w.r.t. base-frame
-    magnet_msg.data = true;
-    magnet_pub.publish(magnet_msg); // MAGNET ON
-
-    moveToStorage();
-    geometry_msgs::Pose target_pose = move_group.getCurrentPose().pose;
-    target_pose = move_group.getCurrentPose().pose;
-
-    // picking up from storage
-    if (count == 1){
-      moveTo(-0.35, target_pose.position.y, 0.342 + 0.1); // #######################################################################################################
-    }else if(count == 2){
-      moveTo(-0.35, target_pose.position.y, 0.342 + 0.20); // #######################################################################################################
-    }
-
-    // placing down at X, Y, Z w.r.t. to base-frame
-    moveToFront();
-    moveTo(atX, atY, (atZ + 0.345)); //0.345 = brick height + magnetic // #######################################################################################################
-    ROS_INFO("unloadTo: Move to predefine position");
-
-    magnet_msg.data = false;
-    magnet_pub.publish(magnet_msg); // MAGNET OFF
-    ROS_INFO("unloadTo: MAGNET OFF");
-    // go back to default position
-    moveToDefault(true);
-    ROS_INFO("unloadTo: Move to Default");
-    magnet_msg.data = true;
-    magnet_pub.publish(magnet_msg); // MAGNET ON
-    ROS_INFO("unloadTo: MAGNET ON");
+    move_group.execute(cartesian_plan);
 
   }
 
-};  // end of class def
+  // void moveToStorageSide345(uint box_count)
+  // {
+  //   // STEP1: Rotate Up
+  //   current_state = move_group.getCurrentState();
+  //   ros::Duration(0.5).sleep();
+  //   current_state = move_group.getCurrentState();
+  //   // Next get the current set of joint values for the group.
+  //   std::vector<double> joint_group_positions;
+  //   current_state->copyJointGroupPositions(joint_model_group, joint_group_positions);
+
+  //   joint_group_positions[2] = PI/6;
+  //   joint_group_positions[3] = PI;
+
+  //   move_group.setJointValueTarget(joint_group_positions);
+  //   move_group.setPlanningTime(PLANNING_TIMEOUT);
+  //   move_group.setMaxVelocityScalingFactor(0.3);
+  //   move_group.setMaxAccelerationScalingFactor(0.3);
+  //   move_group.setGoalJointTolerance(0.01);
+
+  //   success = (move_group.plan(my_plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS);
+  //   ROS_INFO_NAMED("tutorial", "Visualizing Initial joint plan (joint space goal) %s", success ? "SUCCEEDED" : "FAILED");
+
+
+  // #ifdef DEBUG
+  //   visual_tools.prompt("Press 'next' to front position");
+  // #endif
+
+  //   move_group.move();                      // BLOCKING FUNCTION
+
+  //   // STEP2: Turn Left (UGV view)
+  //   current_state = move_group.getCurrentState();
+  //   ros::Duration(0.5).sleep();
+  //   current_state = move_group.getCurrentState();
+  //   current_state->copyJointGroupPositions(joint_model_group, joint_group_positions);
+
+  //   joint_group_positions[0] = PI/2 + PI/2;  // Radian rotate 90 from Default Position
+
+  //   move_group.setJointValueTarget(joint_group_positions);
+  //   move_group.setPlanningTime(PLANNING_TIMEOUT);
+  //   move_group.setGoalJointTolerance(0.01);
+
+  //   ROS_INFO_NAMED("tutorial", "Visualizing Initial joint plan (joint space goal) %s", success ? "SUCCEEDED" : "FAILED");
+
+
+  //   #ifdef DEBUG
+  //     visual_tools.prompt("Press 'next' to front position");
+  //   #endif
+
+  //   move_group.move();                      // BLOCKING FUNCTION
+
+  //   // STEP3: Rotate Down
+  //   current_state = move_group.getCurrentState();
+  //   ros::Duration(0.5).sleep();
+  //   current_state = move_group.getCurrentState();
+  //   current_state->copyJointGroupPositions(joint_model_group, joint_group_positions);
+
+  //   joint_group_positions[2] = PI/4;
+  //   joint_group_positions[3] = 2*PI - PI/4 - PI/2;  // add 2*PI to prevent crash
+  //   joint_group_positions[4] = -PI/2;
+  //   joint_group_positions[5] = PI/2;
+
+  //   move_group.setJointValueTarget(joint_group_positions);
+  //   move_group.setPlanningTime(PLANNING_TIMEOUT);
+  //   move_group.setGoalJointTolerance(0.01);
+
+  //   success = (move_group.plan(my_plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS);
+  //   ROS_INFO_NAMED("tutorial", "Visualizing Initial joint plan (joint space goal) %s", success ? "SUCCEEDED" : "FAILED");
+
+  //   #ifdef DEBUG
+  //     visual_tools.prompt("Press 'next' to front position");
+  //   #endif
+
+  //   move_group.move();                      // BLOCKING FUNCTION
+
+  //   // STEP4: Move Down
+  //   geometry_msgs::Pose target_pose = move_group.getCurrentPose().pose;
+  //   std::vector<geometry_msgs::Pose> waypoints_down;
+  //   target_pose = move_group.getCurrentPose().pose; // Cartesian Path from the current position
+  //   target_pose.position.x = -0.40;
+  //   target_pose.position.y = -0.1;
+
+
+  //   target_pose.position.z = 0.90 - DIST_EE_TO_MAGNET;
+  //   waypoints_down.push_back(target_pose);
+
+  //   target_pose = move_group.getCurrentPose().pose; // Cartesian Path from the current position
+
+  //   if (box_count == 3){  // TUNE
+  //     target_pose.position.z = 0.2;
+  //   }else if(box_count == 4){
+  //     target_pose.position.z = 0.4;
+  //   }else{
+  //     target_pose.position.z = 0.6;
+  //   }
+
+  //   waypoints_down.push_back(target_pose);
+
+  //   move_group.setMaxVelocityScalingFactor(0.1);
+  //   move_group.setMaxAccelerationScalingFactor(0.1);
+  //   move_group.setPlanningTime(PLANNING_TIMEOUT);
+
+  //   moveit_msgs::RobotTrajectory trajectory_down;
+  //   fraction = move_group.computeCartesianPath(waypoints_down, eef_step, jump_threshold, trajectory_down);
+  //   ROS_INFO_NAMED("tutorial", "Visualizing CartesianPath down (%.2f%% achieved)", fraction * 100.0);
+  //   cartesian_plan.trajectory_ = trajectory_down;
+
+  //   // Visualize the plan in RViz
+  //   visual_tools.deleteAllMarkers();
+  //   visual_tools.publishText(text_pose, "Joint Space Goal", rvt::WHITE, rvt::XLARGE);
+  //   visual_tools.publishPath(waypoints_down, rvt::LIME_GREEN, rvt::SMALL);
+  //   for (std::size_t i = 0; i < waypoints_down.size(); ++i)
+  //     visual_tools.publishAxisLabeled(waypoints_down[i], "pt" + std::to_string(i), rvt::SMALL);
+  //   visual_tools.trigger();
+
+  //   #ifdef DEBUG
+  //     visual_tools.prompt("Press 'next' to go down");
+  //   #endif
+
+  //   move_group.execute(cartesian_plan);
+
+  // }
+
+  void moveFromCurrentState(float toX, float toY, float toZ){
+    // input: x, y, z distance w.r.t to camera axis
+    // moving +toX => +X in robot frame
+    // moving +toY => -Y in robot frame
+    // moving +toZ => -Z in robot frame
+    std::vector<geometry_msgs::Pose> waypoints_down;
+    target_pose = move_group.getCurrentPose().pose; // Cartesian Path from the current position
+    ros::Duration(0.5).sleep();
+    target_pose = move_group.getCurrentPose().pose; // Cartesian Path from the current position
+
+    // move according to the robot frame
+    // +X: right
+    // +Y: front
+    // +Z: up
+    target_pose.position.x = target_pose.position.x + toX;
+
+    // Measure DIST_CAM_TO_EE, see CONSTANT part => read bricks' position from camera, but we want to move EE to the brick
+    target_pose.position.y = target_pose.position.y - toY + DIST_CAM_TO_EE;
+    // Measure DIST_CAM_TO_EE, see CONSTANT part
+    target_pose.position.z = target_pose.position.z - toZ - DIST_EE_TO_MAGNET;
+    waypoints_down.push_back(target_pose);
+
+
+    move_group.setMaxVelocityScalingFactor(0.1);
+    move_group.setMaxAccelerationScalingFactor(0.1);
+    move_group.setPlanningTime(PLANNING_TIMEOUT);
+
+
+    moveit_msgs::RobotTrajectory trajectory_down;
+    fraction = move_group.computeCartesianPath(waypoints_down, eef_step, jump_threshold, trajectory_down);
+    ROS_INFO_NAMED("tutorial", "Visualizing CartesianPath down (%.2f%% achieved)", fraction * 100.0);
+    cartesian_plan.trajectory_ = trajectory_down;
+
+
+  #ifdef DEBUG
+    visual_tools.prompt("Press 'next' to go down");
+//    ros::Duration(DELAY).sleep();
+  #endif
+
+    move_group.execute(cartesian_plan);
+
+
+  }
+
+  void moveDownCallBack(const std_msgs::Float32::ConstPtr& msg)
+  {
+
+    if (msg->data >= THRESHOULD_DISTANCE)
+    {
+      geometry_msgs::Pose target_pose = move_group.getCurrentPose().pose;
+      std::vector<geometry_msgs::Pose> waypoints_down;
+      target_pose = move_group.getCurrentPose().pose; // Cartesian Path from the current position
+
+      // move according to the robot frame
+      // +X: right
+      // +Y: front
+      // +Z: up
+      target_pose.position.z -= 0.005;  // go down by 0.005 millimeter
+      waypoints_down.push_back(target_pose);
+
+      // Seong) Set planner, Max velo and Planning time
+      move_group.setPlanningTime(PLANNING_TIMEOUT);
+      move_group.setGoalOrientationTolerance(0.01);
+      move_group.setGoalPositionTolerance(0.01);
+      move_group.setMaxVelocityScalingFactor(0.01);
+      move_group.setMaxAccelerationScalingFactor(0.01);
+
+
+      moveit_msgs::RobotTrajectory trajectory_down;
+      float eef_step_temp = 0.001;  // resolution of 1 mm
+      fraction = move_group.computeCartesianPath(waypoints_down, eef_step_temp, jump_threshold, trajectory_down);
+      ROS_INFO_NAMED("tutorial", "Visualizing CartesianPath down (%.2f%% achieved)", fraction * 100.0);
+      cartesian_plan.trajectory_ = trajectory_down;
+
+    #ifdef DEBUG
+      visual_tools.prompt("Press 'next' to go down");
+    #endif
+
+      move_group.execute(cartesian_plan);
+    }else{
+      // Do Nothing
+    }
+
+  }
+
+
+  // FOR DEBUGGING REMOVE IF NOT NEEDED
+  void manual_moveXYZ(const geometry_msgs::Pose::ConstPtr& msg)
+  {
+    target_pose = move_group.getCurrentPose().pose;
+    ros::Duration(0.5).sleep();
+    target_pose = move_group.getCurrentPose().pose; // Cartesian Path from the current position
+    std::vector<geometry_msgs::Pose> waypoints_down;
+
+    // move according to the robot frame
+    // +X: right
+    // +Y: front
+    // +Z: up
+    target_pose.position.x =  target_pose.position.x + msg->position.x;
+    target_pose.position.y =  target_pose.position.y - msg->position.y; // Measure DIST_CAM_TO_EE, see CONSTANT part
+
+    // Measure DIST_CAM_TO_EE, see CONSTANT part => read button's position from camera, but we want to move EE to the button
+    target_pose.position.z =  target_pose.position.z - msg->position.z;
+    waypoints_down.push_back(target_pose);
+
+    // Seong) Set planner, Max velo and Planning time
+//      move_group.setPlannerId("RRTConnectkConfigDefault");
+    move_group.setPlanningTime(PLANNING_TIMEOUT);
+    move_group.setGoalOrientationTolerance(0.01);
+    move_group.setGoalPositionTolerance(0.01);
+    move_group.setMaxVelocityScalingFactor(0.1);
+    move_group.setMaxAccelerationScalingFactor(0.1);
+
+
+    moveit_msgs::RobotTrajectory trajectory_down;
+    fraction = move_group.computeCartesianPath(waypoints_down, 0.001, jump_threshold, trajectory_down);
+    ROS_INFO_NAMED("tutorial", "Visualizing CartesianPath down (%.2f%% achieved)", fraction * 100.0);
+    cartesian_plan.trajectory_ = trajectory_down;
+
+  #ifdef DEBUG
+    visual_tools.prompt("Press 'next' to go down");
+  #endif
+
+    move_group.execute(cartesian_plan);
+//      ros::Duration(DELAY).sleep();           // wait for robot to update current state otherwise failed
+  }
+
+
+  void initWall()
+  {
+
+      visual_tools.deleteAllMarkers();
+      visual_tools.loadRemoteControl();
+      text_pose.translation().z() = 1.75;
+      visual_tools.publishText(text_pose, "MoveGroupInterface Demo", rvt::WHITE, rvt::XLARGE);
+      visual_tools.trigger();
+
+      // ============================== Set Robot Body Collision ============================== //
+
+      // ---------- UGV_base
+      moveit_msgs::CollisionObject UGV_base; // Define a collision object ROS message.
+      UGV_base.header.frame_id = move_group.getPlanningFrame();
+
+      UGV_base.id = "UGV_base"; // The id of the object is used to identify it.
+
+      shape_msgs::SolidPrimitive primitive_UGV_base; // Define UGV_base dimension (in meter)
+      primitive_UGV_base.type = primitive_UGV_base.BOX;
+      primitive_UGV_base.dimensions.resize(3);
+      primitive_UGV_base.dimensions[0] = 0.80;  // x right
+      primitive_UGV_base.dimensions[1] = 1.12;  // y front
+      primitive_UGV_base.dimensions[2] = 0.59;  // z up
+
+      geometry_msgs::Pose pose_UGV_base; // Define a pose for the Robot_bottom (specified relative to frame_id)
+      q.setRPY(0, 0, 0);
+      pose_UGV_base.orientation.x = q[0];
+      pose_UGV_base.orientation.y = q[1];
+      pose_UGV_base.orientation.z = q[2];
+      pose_UGV_base.orientation.w = q[3];
+      pose_UGV_base.position.y = -primitive_UGV_base.dimensions[1]/2 + 0.05/2 + 0.04;
+      pose_UGV_base.position.z = -primitive_UGV_base.dimensions[2]/2;
+
+      UGV_base.primitives.push_back(primitive_UGV_base);
+      UGV_base.primitive_poses.push_back(pose_UGV_base);
+      UGV_base.operation = UGV_base.ADD;
+
+      // ---------- UGV_base2
+      moveit_msgs::CollisionObject UGV_base2; // Define a collision object ROS message.
+      UGV_base2.header.frame_id = move_group.getPlanningFrame();
+
+      UGV_base2.id = "UGV_base2"; // The id of the object is used to identify it.
+
+      shape_msgs::SolidPrimitive primitive_UGV_base2; // Define UGV_base dimension (in meter)
+      primitive_UGV_base2.type = primitive_UGV_base2.BOX;
+      primitive_UGV_base2.dimensions.resize(3);
+      primitive_UGV_base2.dimensions[0] = primitive_UGV_base.dimensions[0];  // x right
+      primitive_UGV_base2.dimensions[1] = 0.12;  // y front
+      primitive_UGV_base2.dimensions[2] = 0.04;  // z up
+
+      geometry_msgs::Pose pose_UGV_base2; // Define a pose for the Robot_bottom (specified relative to frame_id)
+      q.setRPY(0, 0, 0);
+      pose_UGV_base2.orientation.x = q[0];
+      pose_UGV_base2.orientation.y = q[1];
+      pose_UGV_base2.orientation.z = q[2];
+      pose_UGV_base2.orientation.w = q[3];
+      pose_UGV_base2.position.y = primitive_UGV_base2.dimensions[1]/2 + 0.05/2;
+      pose_UGV_base2.position.z = primitive_UGV_base2.dimensions[2]/2 - 0.29;
+
+      UGV_base2.primitives.push_back(primitive_UGV_base2);
+      UGV_base2.primitive_poses.push_back(pose_UGV_base2);
+      UGV_base2.operation = UGV_base2.ADD;
+
+      // ---------- Magnet Panel at end effector
+      moveit_msgs::CollisionObject magnet_panel;
+      magnet_panel.header.frame_id = move_group.getEndEffectorLink(); // reference to end-effector frame
+      magnet_panel.id = "magnet_panel"; // The id of the object is used to identify it.
+
+      shape_msgs::SolidPrimitive primitive_magnet_panel; // Define UGV_body dimension (in meter)
+      primitive_magnet_panel.type = primitive_magnet_panel.BOX;
+      primitive_magnet_panel.dimensions.resize(3);
+      primitive_magnet_panel.dimensions[0] = DIST_EE_TO_MAGNET;  // length (x)
+      primitive_magnet_panel.dimensions[1] = 0.11;  // width  (y)
+      primitive_magnet_panel.dimensions[2] = 0.16;  // height (z)
+
+      // magnetic panel
+      geometry_msgs::Pose pose_magnet_panel; // Define a pose for the UGV_body (specified relative to frame_id)
+//      q.setRPY(45, 0, 0);
+//      q.normalize();
+      // Rotate 45 degree about x-axis from https://quaternions.online/
+      pose_magnet_panel.orientation.x = 0.383;
+      pose_magnet_panel.orientation.y = 0.0;
+      pose_magnet_panel.orientation.z = 0.0;
+      pose_magnet_panel.orientation.w = 0.924;
+
+      //note the axis of EE
+      pose_magnet_panel.position.x = primitive_magnet_panel.dimensions[0]/2;
+      pose_magnet_panel.position.y = 0.02475;
+      pose_magnet_panel.position.z = 0.02475;
+
+      magnet_panel.primitives.push_back(primitive_magnet_panel);
+      magnet_panel.primitive_poses.push_back(pose_magnet_panel);
+      magnet_panel.operation = magnet_panel.ADD;
+
+      // ---------- Container1
+      moveit_msgs::CollisionObject Container1; // Define a collision object ROS message.
+      Container1.header.frame_id = move_group.getPlanningFrame();
+
+      Container1.id = "Container1"; // The id of the object is used to identify it.
+
+      shape_msgs::SolidPrimitive primitive_Container1; // Define UGV_base dimension (in meter)
+      primitive_Container1.type = primitive_Container1.BOX;
+      primitive_Container1.dimensions.resize(3);
+      primitive_Container1.dimensions[0] = 0.03;  // x right
+      primitive_Container1.dimensions[1] = 1.20;  // y front
+      primitive_Container1.dimensions[2] = 1.0;  // z up
+
+      geometry_msgs::Pose pose_Container1; // Define a pose for the Robot_bottom (specified relative to frame_id)
+      q.setRPY(0, 0, 0);
+      pose_Container1.orientation.x = q[0];
+      pose_Container1.orientation.y = q[1];
+      pose_Container1.orientation.z = q[2];
+      pose_Container1.orientation.w = q[3];
+      pose_Container1.position.x = -primitive_Container1.dimensions[0]/2 - primitive_UGV_base.dimensions[0] / 2 - 0.33;
+      pose_Container1.position.y = -primitive_Container1.dimensions[1]/2 + 0.05/2 + 0.08 + 0.04;
+      pose_Container1.position.z = primitive_Container1.dimensions[2]/2 - 0.30 - 0.30;
+
+      Container1.primitives.push_back(primitive_Container1);
+      Container1.primitive_poses.push_back(pose_Container1);
+      Container1.operation = Container1.ADD;
+
+      // ---------- Container2
+      moveit_msgs::CollisionObject Container2; // Define a collision object ROS message.
+      Container2.header.frame_id = move_group.getPlanningFrame();
+
+      Container2.id = "Container2"; // The id of the object is used to identify it.
+
+      shape_msgs::SolidPrimitive primitive_Container2; // Define UGV_base dimension (in meter)
+      primitive_Container2.type = primitive_Container2.BOX;
+      primitive_Container2.dimensions.resize(3);
+      primitive_Container2.dimensions[0] = 0.03;  // x right
+      primitive_Container2.dimensions[1] = 0.95;  // y front
+      primitive_Container2.dimensions[2] = 1.0;  // z up
+
+      geometry_msgs::Pose pose_Container2; // Define a pose for the Robot_bottom (specified relative to frame_id)
+      q.setRPY(0, 0, 0);
+      pose_Container2.orientation.x = q[0];
+      pose_Container2.orientation.y = q[1];
+      pose_Container2.orientation.z = q[2];
+      pose_Container2.orientation.w = q[3];
+      pose_Container2.position.x = -primitive_Container2.dimensions[0]/2 - 0.4;
+      pose_Container2.position.y = -0.58 - 0.15;
+      pose_Container2.position.z = primitive_Container2.dimensions[2]/2 - 0.30 - 0.30;
+
+      Container2.primitives.push_back(primitive_Container2);
+      Container2.primitive_poses.push_back(pose_Container2);
+      Container2.operation = Container2.ADD;
+
+      // ---------- ground
+      moveit_msgs::CollisionObject ground; // Define a collision object ROS message.
+      ground.header.frame_id = move_group.getPlanningFrame(); // reference to end-effector frame
+      ground.id = "ground"; // The id of the object is used to identify it.
+
+      shape_msgs::SolidPrimitive primitive_ground; // Define UGV_body dimension (in meter)
+      primitive_ground.type = primitive_ground.BOX;
+      primitive_ground.dimensions.resize(3);
+      primitive_ground.dimensions[0] = 3;  // length (x)
+      primitive_ground.dimensions[1] = 3;  // width  (y)
+      primitive_ground.dimensions[2] = 0.04;  // height (z)
+
+      geometry_msgs::Pose pose_ground; // Define a pose for the UGV_body (specified relative to frame_id)
+      q.setRPY(0, 0, 0);
+      pose_ground.orientation.x = q[0];
+      pose_ground.orientation.y = q[1];
+      pose_ground.orientation.z = q[2];
+      pose_ground.orientation.w = q[3];
+      pose_ground.position.x = 0;
+      pose_ground.position.y = 0;
+      pose_ground.position.z = - primitive_ground.dimensions[2]/2 - primitive_UGV_base.dimensions[2];
+
+      ground.primitives.push_back(primitive_ground);
+      ground.primitive_poses.push_back(pose_ground);
+      ground.operation = ground.ADD;
+
+      // ---------- Collect Whole Robot Body
+
+      std::vector<moveit_msgs::CollisionObject> collision_robot_body;
+      collision_robot_body.push_back(UGV_base);
+      collision_robot_body.push_back(UGV_base2);
+      collision_robot_body.push_back(magnet_panel);
+      collision_robot_body.push_back(Container1);
+      collision_robot_body.push_back(Container2);
+      collision_robot_body.push_back(ground);
+      planning_scene_interface.addCollisionObjects(collision_robot_body); //add the collision object into the world
+      ros::Duration(DELAY).sleep(); // wait to build the object before attaching to ee
+      move_group.attachObject(magnet_panel.id); // attach the magnet panel to end-effector
+
+
+  }
+
+  void attachBrick()
+  {
+    brick.header.frame_id = move_group.getEndEffectorLink(); // reference to end-effector frame
+    brick.id = "brick"; // The id of the object is used to identify it.
+
+    shape_msgs::SolidPrimitive primitive_brick; // Define UGV_body dimension (in meter)
+    primitive_brick.type = primitive_brick.BOX;
+    primitive_brick.dimensions.resize(3);
+    primitive_brick.dimensions[0] = 0.20;  // length (x)
+    primitive_brick.dimensions[1] = 0.20;  // width  (y)
+    primitive_brick.dimensions[2] = 1.80;  // height (z)
+
+    // magnetic panel
+    geometry_msgs::Pose pose_brick; // Define a pose for the UGV_body (specified relative to frame_id)
+    q.setRPY(0, 0, 0);
+    pose_brick.orientation.x = q[0];
+    pose_brick.orientation.y = q[1];
+    pose_brick.orientation.z = q[2];
+    pose_brick.orientation.w = q[3];
+    pose_brick.position.x = primitive_brick.dimensions[0]/2 + 0.0627;
+    pose_brick.position.y = 0;
+    pose_brick.position.z = 0;
+
+    brick.primitives.push_back(primitive_brick);
+    brick.primitive_poses.push_back(pose_brick);
+    brick.operation = brick.ADD;
+
+    std::vector<moveit_msgs::CollisionObject> collision_robot_body2;
+    collision_robot_body2.push_back(brick);
+    planning_scene_interface.addCollisionObjects(collision_robot_body2); //add the collision object into the world
+    move_group.attachObject(brick.id); // attach the magnet panel to end-effector
+  }
+
+  void detachBrick()
+  {
+    move_group.detachObject(brick.id);
+    std::vector<std::string> object_ids;
+    object_ids.push_back(brick.id);
+    planning_scene_interface.removeCollisionObjects(object_ids);
+  }
+
+
+};  // end of class definition
 
 int main(int argc, char** argv)
 {
@@ -702,3 +1077,4 @@ int main(int argc, char** argv)
 
   return 0;
 }
+
