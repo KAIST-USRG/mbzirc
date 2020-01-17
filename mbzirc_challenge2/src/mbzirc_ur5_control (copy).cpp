@@ -1,5 +1,18 @@
+#include <pluginlib/class_loader.h>
+#include <ros/ros.h>
+
+//Move it
+#include <moveit/robot_model_loader/robot_model_loader.h>
+#include <moveit/planning_pipeline/planning_pipeline.h>
+#include <moveit/planning_interface/planning_interface.h>
+#include <moveit/kinematic_constraints/utils.h>
+#include <moveit_msgs/DisplayTrajectory.h>
+#include <moveit_msgs/PlanningScene.h>
+#include <moveit_visual_tools/moveit_visual_tools.h>
+
 #include <moveit/move_group_interface/move_group_interface.h>
 #include <moveit/planning_scene_interface/planning_scene_interface.h>
+#include <moveit/trajectory_processing/iterative_time_parameterization.h>
 
 #include <moveit_msgs/DisplayRobotState.h>
 #include <moveit_msgs/DisplayTrajectory.h>
@@ -7,7 +20,6 @@
 #include <moveit_msgs/AttachedCollisionObject.h>
 #include <moveit_msgs/CollisionObject.h>
 
-#include <moveit_visual_tools/moveit_visual_tools.h>
 #include "std_msgs/Bool.h"
 #include "std_msgs/UInt16.h"
 #include "std_msgs/Float32.h"
@@ -26,6 +38,7 @@
 
 const double DIST_EE_TO_MAGNET = 0.0627;
 const double DIST_CAM_TO_EE = 0;
+const double DIST_LIDAR_TO_MAGNET = 0;
 
 namespace rvt = rviz_visual_tools;
 
@@ -35,7 +48,8 @@ tf2::Quaternion q;
 // FLAG for robot motion
 
 bool FLAG_READ_CAM_DATA = false;    // Should the arm read message from camera?
-
+bool FLAG_SWITCH_TOUCHED = false;
+bool FLAG_MAGNET_ON = true;      // Is the magnet on?
 
 int gb_count_pose_msg = 0;
 int gb_discard_noise = 0;
@@ -48,7 +62,7 @@ float gb_xq_sum = 0;
 float gb_yq_sum = 0;
 float gb_zq_sum = 0;
 float gb_wq_sum = 0;
-bool FLAG_MAGNET_ON = true;      // Is the magnet on?
+
 
 
 class Arm{
@@ -56,6 +70,7 @@ private:
   moveit::planning_interface::MoveGroupInterface::Plan my_plan;
   moveit::planning_interface::MoveGroupInterface::Plan cartesian_plan;
   moveit::planning_interface::PlanningSceneInterface planning_scene_interface;
+  trajectory_processing::IterativeParabolicTimeParameterization iptp;
 
   moveit_msgs::CollisionObject brick; // Define a collision object ROS message.
 
@@ -83,6 +98,7 @@ private:
   ros::Subscriber manual_moveXVZ_sub;
   ros::Subscriber magnet_state_sub;
   ros::Subscriber sensor_range_sub;
+  ros::Subscriber switch_state_sub;
 
   ros::NodeHandle nh_;
   ros::NodeHandle nh;
@@ -140,6 +156,7 @@ public:
     readCamData_flag_sub = nh.subscribe("/readCamData_Flag", 100, &Arm::readCamDataFlagCallback, this);
     manual_moveXVZ_sub = nh.subscribe("/manual_moveXVZ", 10, &Arm::manual_moveXYZ, this);
     sensor_range_sub = nh.subscribe("/sensor_range", 1, &Arm::moveDownCallBack, this);
+    switch_state_sub = nh.subscribe("/switch_state", 1, &Arm::switchStateCallback, this);
 
   }
 
@@ -150,6 +167,26 @@ public:
     }
     else if (msg->data == false){
       FLAG_MAGNET_ON = false;
+    }
+  }
+
+  void switchStateCallback(const std_msgs::Bool::ConstPtr& msg){
+    // keep track of the magnet state => allows arm to read data only when the magnet is on
+    if (msg->data == true){ // The active motion plan should stop when the switch is triggered
+      FLAG_SWITCH_TOUCHED = true;
+      move_group.stop();
+    }
+    else if (msg->data == false){
+      FLAG_SWITCH_TOUCHED = false;
+    }
+  }
+
+  void readCamDataFlagCallback(const std_msgs::Bool::ConstPtr& msg)
+  {
+    if (msg->data == true){
+      FLAG_READ_CAM_DATA = true;
+    }else{
+      FLAG_READ_CAM_DATA = false;
     }
   }
 
@@ -228,11 +265,11 @@ public:
     {
       // Move XY position (image frame) to align with the button
       // And simultaneously move down Z/2 at the same time (default pose is too high -> move XY only -> out of working space)
-      ROS_INFO("MOVE XY: x = %lf, y = %lf, z/2 = %lf", msg->position.x, msg->position.y, msg->position.z / 2);
+      ROS_INFO("MOVE XY: x = %lf, y = %lf, z/2 = %lf", msg->position.x, msg->position.y - DIST_CAM_TO_EE, msg->position.z / 2);
       #ifdef DEBUG
       visual_tools.prompt("Press 'next' to go move XY");  // DEBUG remove if not NEEDED
       #endif
-      moveFromCurrentState(msg->position.x, msg->position.y, msg->position.z / 2);
+      moveFromCurrentState(msg->position.x, msg->position.y - DIST_CAM_TO_EE, msg->position.z / 2);
       FLAG_READ_CAM_DATA = true;
     }else if(gb_count_move == 1) // move in to push the button
     {
@@ -289,11 +326,11 @@ public:
 
       // Step 2: Move down to get the brick
       // XY should already be aligned
-      ROS_INFO("MOVE Z: z = %lf", msg->position.z);
+      ROS_INFO("MOVE Z: z = %lf", msg->position.z - DIST_LIDAR_TO_MAGNET);
       #ifdef DEBUG
       visual_tools.prompt("Press 'next' to go move XY");  // DEBUG remove if not NEEDED
       #endif
-      moveFromCurrentState(0, 0, msg->position.z);
+      moveFromCurrentState(0, 0, msg->position.z - DIST_LIDAR_TO_MAGNET);
       attachBrick();
 
       // Step 3: Move back to default position, preparing to store the brick on the UGV
@@ -307,23 +344,13 @@ public:
 
   }
 
-
-  void readCamDataFlagCallback(const std_msgs::Bool::ConstPtr& msg)
-  {
-    if (msg->data == true){
-      FLAG_READ_CAM_DATA = true;
-    }else{
-      FLAG_READ_CAM_DATA = false;
-    }
-  }
-
   void moveToStorageSideFlagCallback(const std_msgs::Bool::ConstPtr& msg)
   {
     // Subscribe: moveToStorageSide_flag_msg
     // Publish: moveToStorageSide_finished_flag_msg
     if (msg->data == true){
       gb_count_box += 1;
-      moveToStorageSide12(gb_count_box);
+      moveToStorageSide(gb_count_box);
 
       magnet_state_msg.data = false;
       magnet_state_pub.publish(magnet_state_msg); // MAGNET OFF
@@ -434,7 +461,7 @@ public:
 
   }
 
-  void moveToStorageSide12(uint box_count)
+  void moveToStorageSide(uint box_count)
   {
     // STEP1: Rotate Up
     current_state = move_group.getCurrentState();
@@ -722,9 +749,9 @@ public:
     target_pose.position.x = target_pose.position.x + toX;
 
     // Measure DIST_CAM_TO_EE, see CONSTANT part => read bricks' position from camera, but we want to move EE to the brick
-    target_pose.position.y = target_pose.position.y - toY + DIST_CAM_TO_EE;
+    target_pose.position.y = target_pose.position.y - toY;
     // Measure DIST_CAM_TO_EE, see CONSTANT part
-    target_pose.position.z = target_pose.position.z - toZ - DIST_EE_TO_MAGNET;
+    target_pose.position.z = target_pose.position.z - toZ;
     waypoints_down.push_back(target_pose);
 
 
@@ -751,8 +778,7 @@ public:
 
   void moveDownCallBack(const std_msgs::Float32::ConstPtr& msg)
   {
-
-    if (msg->data >= THRESHOULD_DISTANCE)
+    while (FLAG_SWITCH_TOUCHED == false)
     {
       geometry_msgs::Pose target_pose = move_group.getCurrentPose().pose;
       std::vector<geometry_msgs::Pose> waypoints_down;
@@ -762,20 +788,21 @@ public:
       // +X: right
       // +Y: front
       // +Z: up
-      target_pose.position.z -= 0.005;  // go down by 0.005 millimeter
+      target_pose.position.z -= 0.01;  // go down by 0.005 millimeter
       waypoints_down.push_back(target_pose);
 
       // Seong) Set planner, Max velo and Planning time
       move_group.setPlanningTime(PLANNING_TIMEOUT);
-      move_group.setGoalOrientationTolerance(0.01);
-      move_group.setGoalPositionTolerance(0.01);
-      move_group.setMaxVelocityScalingFactor(0.01);
-      move_group.setMaxAccelerationScalingFactor(0.01);
+      move_group.setGoalOrientationTolerance(0.0001);
+      move_group.setGoalPositionTolerance(0.0001);
+      move_group.setMaxVelocityScalingFactor(0.0001);
+      move_group.setMaxAccelerationScalingFactor(0.0001);
 
 
       moveit_msgs::RobotTrajectory trajectory_down;
-      float eef_step_temp = 0.001;  // resolution of 1 mm
+      float eef_step_temp = 0.0001;  // resolution of 1 mm
       fraction = move_group.computeCartesianPath(waypoints_down, eef_step_temp, jump_threshold, trajectory_down);
+      bool success = iptp.computeTimeStamps(trajectory_down, 0.1, 0.1);
       ROS_INFO_NAMED("tutorial", "Visualizing CartesianPath down (%.2f%% achieved)", fraction * 100.0);
       cartesian_plan.trajectory_ = trajectory_down;
 
@@ -784,10 +811,7 @@ public:
     #endif
 
       move_group.execute(cartesian_plan);
-    }else{
-      // Do Nothing
     }
-
   }
 
 
