@@ -1,7 +1,7 @@
 #include <pluginlib/class_loader.h>
 #include <ros/ros.h>
 
-//Move it
+// Move it
 #include <moveit/robot_model_loader/robot_model_loader.h>
 #include <moveit/planning_pipeline/planning_pipeline.h>
 #include <moveit/planning_interface/planning_interface.h>
@@ -133,7 +133,7 @@ public:
     // We can now setup the PlanningPipeline
       // object, which will use the ROS parameter server
       // to determine the set of request adapters and the
-      // planning plugin to use
+      // planning plug in to use
       planning_pipeline::PlanningPipelinePtr planning_pipeline(
           new planning_pipeline::PlanningPipeline(robot_model, nh, "planning_plugin", "request_adapters"));
 
@@ -167,7 +167,7 @@ public:
     moveXYZ_sub = nh.subscribe("/avg_pose", 10, &Arm::_moveXYZCallback, this);
     readCamData_flag_sub = nh.subscribe("/readCamData_Flag", 100, &Arm::readCamDataFlagCallback, this);
     manual_moveXVZ_sub = nh.subscribe("/manual_moveXVZ", 10, &Arm::manual_moveXYZ, this);
-    sensor_range_sub = nh.subscribe("/sensor_range", 1, &Arm::moveDownCallBack, this);
+//    sensor_range_sub = nh.subscribe("/sensor_range", 1, &Arm::moveDownCallBack, this);
     switch_state_sub = nh.subscribe("/switch_state", 1, &Arm::switchStateCallback, this);
 
   }
@@ -243,7 +243,7 @@ public:
         avg_pose_msg.orientation.w = gb_wq_sum/n;
 
         avg_pose_pub.publish(avg_pose_msg);
-        gb_count_move += 1;
+
 
 
         FLAG_READ_CAM_DATA = false;
@@ -283,6 +283,7 @@ public:
       #endif
       moveFromCurrentState(msg->position.x, msg->position.y - DIST_CAM_TO_EE, msg->position.z / 2);
       FLAG_READ_CAM_DATA = true;
+      gb_count_move += 1;
     }else if(gb_count_move == 1) // move in to push the button
     {
       // 3 steps
@@ -343,6 +344,17 @@ public:
       visual_tools.prompt("Press 'next' to go move XY");  // DEBUG remove if not NEEDED
       #endif
       moveFromCurrentState(0, 0, msg->position.z - DIST_LIDAR_TO_MAGNET);
+
+      while (true)
+      {
+        moveDownSlowly(); // continue to move down until the tactile sensor is triggered
+
+        if (FLAG_SWITCH_TOUCHED == true) // tactile sensor is triggered => stop
+        {
+          break;
+        }
+      }
+
       attachBrick();
 
       // Step 3: Move back to default position, preparing to store the brick on the UGV
@@ -631,53 +643,50 @@ public:
 
   }
 
-  void moveDownCallBack(const std_msgs::Float32::ConstPtr& msg)
+  void moveDownSlowly()
   {
-    while (FLAG_SWITCH_TOUCHED == false)
-    {
-      geometry_msgs::Pose target_pose = move_group.getCurrentPose().pose;
-      std::vector<geometry_msgs::Pose> waypoints_down;
-      target_pose = move_group.getCurrentPose().pose; // Cartesian Path from the current position
+    geometry_msgs::Pose target_pose = move_group.getCurrentPose().pose;
+    std::vector<geometry_msgs::Pose> waypoints_down;
+    target_pose = move_group.getCurrentPose().pose; // Cartesian Path from the current position
 
-      // move according to the robot frame
-      // +X: right
-      // +Y: front
-      // +Z: up
-      target_pose.position.z -= 0.1;  // go down by 0.005 millimeter
-      waypoints_down.push_back(target_pose);
+    // move according to the robot frame
+    // +X: right
+    // +Y: front
+    // +Z: up
+    target_pose.position.z -= 0.1;  // go down by 0.005 millimeter
+    waypoints_down.push_back(target_pose);
 
-      // Seong) Set planner, Max velo and Planning time
-      move_group.setPlanningTime(PLANNING_TIMEOUT);
-      move_group.setGoalOrientationTolerance(0.0001);
-      move_group.setGoalPositionTolerance(0.0001);
-      move_group.setMaxVelocityScalingFactor(0.1);
-      move_group.setMaxAccelerationScalingFactor(0.1);
+    // Seong) Set planner, Max velo and Planning time
+    move_group.setPlanningTime(PLANNING_TIMEOUT);
+    move_group.setGoalOrientationTolerance(0.0001);
+    move_group.setGoalPositionTolerance(0.0001);
+    move_group.setMaxVelocityScalingFactor(0.1);
+    move_group.setMaxAccelerationScalingFactor(0.1);
 
 
-      moveit_msgs::RobotTrajectory trajectory_down;
-      float eef_step_temp = 0.001;  // resolution of 1 mm
-      fraction = move_group.computeCartesianPath(waypoints_down, eef_step_temp, jump_threshold, trajectory_down);
+    moveit_msgs::RobotTrajectory trajectory_down;
+    float eef_step_temp = 0.001;  // resolution of 1 mm
+    fraction = move_group.computeCartesianPath(waypoints_down, eef_step_temp, jump_threshold, trajectory_down);
 
-      // First create a RobotTrajectory object
-      robot_trajectory::RobotTrajectory rt(move_group.getCurrentState()->getRobotModel(), "manipulator");
-      // Second get a RobotTrajectory from trajectory
-      rt.setRobotTrajectoryMsg(*move_group.getCurrentState(), trajectory_down);
-      // Thrid create a IterativeParabolicTimeParameterization object
-      trajectory_processing::IterativeParabolicTimeParameterization iptp;
-      // Fourth compute computeTimeStamps
-      bool success = iptp.computeTimeStamps(rt, 0.01, 0.01);
-      rt.getRobotTrajectoryMsg(trajectory_down);
+    // First create a RobotTrajectory object
+    robot_trajectory::RobotTrajectory rt(move_group.getCurrentState()->getRobotModel(), "manipulator");
+    // Second get a RobotTrajectory from trajectory
+    rt.setRobotTrajectoryMsg(*move_group.getCurrentState(), trajectory_down);
+    // Thrid create a IterativeParabolicTimeParameterization object
+    trajectory_processing::IterativeParabolicTimeParameterization iptp;
+    // Fourth compute computeTimeStamps
+    bool success = iptp.computeTimeStamps(rt, 0.01, 0.01);
+    rt.getRobotTrajectoryMsg(trajectory_down);
 
 //      bool success = iptp.computeTimeStamps(trajectory_down, 0.1, 0.1);
-      ROS_INFO_NAMED("tutorial", "Visualizing CartesianPath down (%.2f%% achieved)", fraction * 100.0);
-      cartesian_plan.trajectory_ = trajectory_down;
+    ROS_INFO_NAMED("tutorial", "Visualizing CartesianPath down (%.2f%% achieved)", fraction * 100.0);
+    cartesian_plan.trajectory_ = trajectory_down;
 
-    #ifdef DEBUG
-      visual_tools.prompt("Press 'next' to go down");
-    #endif
+  #ifdef DEBUG
+    visual_tools.prompt("Press 'next' to go down");
+  #endif
 
-      move_group.execute(cartesian_plan);
-    }
+    move_group.execute(cartesian_plan);
   }
 
 
@@ -927,12 +936,13 @@ public:
 
     // magnetic panel
     geometry_msgs::Pose pose_brick; // Define a pose for the UGV_body (specified relative to frame_id)
-    q.setRPY(0, 0, 0);
-    pose_brick.orientation.x = q[0];
-    pose_brick.orientation.y = q[1];
-    pose_brick.orientation.z = q[2];
-    pose_brick.orientation.w = q[3];
-    pose_brick.position.x = primitive_brick.dimensions[0]/2 + 0.0627;
+//    q.setRPY(0, 0, 0);
+    // Rotate 45 degree about x-axis from https://quaternions.online/
+    pose_brick.orientation.x = 0.383;
+    pose_brick.orientation.y = 0.0;
+    pose_brick.orientation.z = 0.0;
+    pose_brick.orientation.w = 0.924;
+    pose_brick.position.x = primitive_brick.dimensions[0]/2 + DIST_EE_TO_MAGNET;
     pose_brick.position.y = 0;
     pose_brick.position.z = 0;
 

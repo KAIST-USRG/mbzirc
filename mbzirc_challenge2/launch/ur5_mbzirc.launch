@@ -18,4 +18,10 @@
   <node name="UR5_controller" pkg="mbzirc_challenge2" type="mbzirc_ur5_control" respawn="false" output="screen">
   </node>
 
+  <!-- Initialize 1D lidar node-->
+  <node name="1D_lidar" pkg="teraranger" type="evo">
+    <param name="_portname" value="/dev/ttyACM0" /> <!-- CHECK the correct port-->
+    <param name="_sensor_type" value="Evo_3m" />
+  </node>
+
  </launch>
