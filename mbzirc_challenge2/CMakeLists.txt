@@ -47,6 +47,12 @@ catkin_package(
     EIGEN3
 )
 
+# Generate messages in the 'msg' folder
+add_message_files(
+   FILES
+   BoxInfo.msg
+)
+
 ###########
 ## Build ##
 ###########
