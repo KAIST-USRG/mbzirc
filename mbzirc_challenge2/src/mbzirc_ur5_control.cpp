@@ -200,11 +200,10 @@ public:
       FLAG_SWITCH_TOUCHED = true;
       move_group.stop();
     }
-    else if (msg->data == false)
+    else
     {
       FLAG_SWITCH_TOUCHED = false;  // switch is deactivated
-    }else
-    {
+
       // do nothing
     }
   }
