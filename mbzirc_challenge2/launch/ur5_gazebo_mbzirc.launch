@@ -1,0 +1,28 @@
+<?xml version="1.0"?>
+<launch>
+
+  <!-- Initialize Gazebo -->
+  <include file="$(find ur_gazebo)/launch/ur5.launch"/>
+
+
+  <!-- Initialize the planning scene -->
+  <include file="$(find ur5_moveit_config)/launch/ur5_moveit_planning_execution.launch">
+    <arg name = "sim" value="true"/>
+  </include>
+
+  <!-- Initialize RVIZ -->
+  <include file="$(find ur5_moveit_config)/launch/moveit_rviz.launch">
+    <arg name="config" value="true"/>
+  </include>
+
+  <!-- Initialize the UR5 controller node -->
+  <node name="UR5_controller" pkg="mbzirc_challenge2" type="mbzirc_ur5_control" respawn="false" output="screen">
+  </node>
+
+  <!-- Initialize Arduino: Switch -->
+  <node name="serial_node_switch" pkg="rosserial_python" type="serial_node.py" respawn="false" output="screen">
+    <param name="port" value="/dev/ttyACM0"/>
+    <param name="baud" value="9600"/>
+  </node>
+
+ </launch>
