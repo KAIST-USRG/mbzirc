@@ -12,6 +12,7 @@ endif()
 
 find_package(catkin REQUIRED
   COMPONENTS
+    mission_manager
     interactive_markers
     moveit_core
     moveit_visual_tools
@@ -25,13 +26,29 @@ find_package(catkin REQUIRED
     tf2_ros
     tf2_eigen
     tf2_geometry_msgs
-  
+    message_generation
 )
 find_package(Boost REQUIRED system filesystem date_time thread)
+
+# add_service_files(
+#   FILES
+#   ur_move.srv
+# )
+
 
 #set(THIS_PACKAGE_INCLUDE_DIRS
 #  doc/interactivity/include
 #)
+# Generate messages in the 'msg' folder
+add_message_files(
+   FILES
+   BoxInfo.msg
+)
+generate_messages(
+  DEPENDENCIES
+  std_msgs
+  geometry_msgs
+)
 
 catkin_package(
   LIBRARIES
@@ -47,11 +64,8 @@ catkin_package(
     EIGEN3
 )
 
-# Generate messages in the 'msg' folder
-add_message_files(
-   FILES
-   BoxInfo.msg
-)
+
+
 
 ###########
 ## Build ##
@@ -76,6 +90,10 @@ link_directories(${catkin_LIBRARY_DIRS})
 #add_subdirectory(doc/pick_place)
 #add_subdirectory(doc/perception_pipeline)
 
+
+
 add_executable(mbzirc_ur5_control src/mbzirc_ur5_control.cpp)
 target_link_libraries(mbzirc_ur5_control ${catkin_LIBRARIES} ${Boost_LIBRARIES})
 install(TARGETS mbzirc_ur5_control DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION})
+
+add_dependencies(mbzirc_ur5_control ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})

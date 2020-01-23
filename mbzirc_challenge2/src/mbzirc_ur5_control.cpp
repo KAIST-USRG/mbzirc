@@ -19,10 +19,17 @@
 #include <moveit_msgs/AttachedCollisionObject.h>
 #include <moveit_msgs/CollisionObject.h>
 
+// srv
+// #include <mbzirc_challenge2/ur_move.h>
+#include <mission_manager/ur_move.h>
+
+
 #include "std_msgs/Bool.h"
 #include "std_msgs/UInt16.h"
 #include "std_msgs/Float32.h"
 #include <tf/transform_broadcaster.h>
+
+
 
 
 //#define DEBUG
@@ -35,10 +42,10 @@
 #define DIST_LIDAR_TO_MAGNET 0
 #define Z_OFFSET 0.02
 
-#define RED 0
-#define GREEN 1
+#define RED 4
+#define GREEN 3
 #define BLUE 2
-#define ORANGE 3
+#define ORANGE 1
 
 
 namespace rvt = rviz_visual_tools;
@@ -103,6 +110,8 @@ private:
   ros::Subscriber sensor_range_sub;
   ros::Subscriber switch_state_sub;
 
+  ros::ServiceServer service_tmp;
+
   ros::NodeHandle node_handle;
   ros::NodeHandle nh;
 
@@ -151,12 +160,6 @@ public:
 
     robot_trajectory::RobotTrajectory rt(robot_model_loader.getModel(), PLANNING_GROUP);
 
-
-    // Turn on Magnet
-    magnet_state_msg.data = true;
-    magnet_state_pub.publish(magnet_state_msg);
-    ROS_INFO("MAGNET_ON");
-
     joint_model_group =
                 move_group.getCurrentState()->getJointModelGroup(PLANNING_GROUP);
     text_pose = Eigen::Isometry3d::Identity();
@@ -170,7 +173,7 @@ public:
     box_count_pub = nh.advertise<std_msgs::UInt16>("/box_count", 10);
     magnet_state_pub = nh.advertise<std_msgs::Bool>("/magnet_on", 10);
 
-    pose_from_cam_sub = nh.subscribe("/bbox_pose", 10, &Arm::calcAvgCallback, this);
+    pose_from_cam_sub = nh.subscribe("/brick_pose", 10, &Arm::calcAvgCallback, this);
     moveToStorageSide_flag_sub = nh.subscribe("/moveToStorageSide_flag", 10, &Arm::moveToStorageSideFlagCallback, this);
     moveToDefault_flag_sub = nh.subscribe("/moveToDefault_flag", 10, &Arm::moveToDafaultFlagCallback, this);
     moveXYZ_sub = nh.subscribe("/avg_pose", 10, &Arm::_moveXYZCallback, this);
@@ -179,6 +182,28 @@ public:
     // sensor_range_sub = nh.subscribe("/sensor_range", 1, &Arm::moveDownCallBack, this);
     switch_state_sub = nh.subscribe("/switch_state", 1, &Arm::switchStateCallback, this);
 
+    service_tmp = nh.advertiseService("ur_move", &Arm::test, this);
+
+    ros::Duration(1).sleep();
+    // Turn on Magnet
+    magnet_state_msg.data = true;
+    magnet_state_pub.publish(magnet_state_msg);
+    ROS_INFO("MAGNET_ON");
+
+  }
+
+  bool test(mission_manager::ur_move::Request  &req,
+            mission_manager::ur_move::Response  &res)
+  {   res.success_or_fail = true;
+      std::cout << " req, target_node_name : " <<  req.target_node_name << std::endl;
+      std::cout << " req, target_load_or_unload : " << req.target_load_or_unload << std::endl;
+      std::cout << " req, target_brick_color_code : " << req.target_brick_color_code << std::endl;
+      std::cout << " req, target_brick_container_side_left_right : " << req.target_brick_container_side_left_right << std::endl;
+      // if (req.target_brick_container_side_left_right == false)
+      // {
+      //   moveToDefault();
+      // }
+      return true;
   }
 
   void magnetStateCallBack(const std_msgs::Bool::ConstPtr& msg)
@@ -399,9 +424,7 @@ public:
     gb_count_move = 0;
     moveToDefault();
     moveToDefault_finished_flag_msg.data = true;
-    moveToDefault_finished_flag_pub.publish(moveToDefault_finished_flag_msg); // let the planner know that the arm is at default position
-
-    
+    moveToDefault_finished_flag_pub.publish(moveToDefault_finished_flag_msg); // let the planner know that the arm is at default position 
 
   }
 
