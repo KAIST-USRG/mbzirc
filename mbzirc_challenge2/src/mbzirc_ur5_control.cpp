@@ -32,7 +32,7 @@
 
 
 
-//#define DEBUG
+// #define DEBUG
 #define DELAY 1.0         // for sleep function => robot updating states => 0.4 s fail (?)
 #define PLANNING_TIMEOUT 2
 #define NUM_SUM 3      // to average the pose message
@@ -41,6 +41,7 @@
 #define DIST_CAM_TO_EE 0
 #define DIST_LIDAR_TO_MAGNET 0
 #define Z_OFFSET 0.02
+#define BELT_BASE_HEIGHT 0.26
 
 #define RED 4
 #define GREEN 3
@@ -437,7 +438,7 @@ public:
     // Publish: moveToStorageSide_finished_flag_msg
     if (msg->data == true){
       gb_count_box += 1;
-      moveToStorageSide(gb_count_box);
+      moveToStorageSide2(gb_count_box);
 
       magnet_state_msg.data = false;
       magnet_state_pub.publish(magnet_state_msg); // MAGNET OFF
@@ -604,7 +605,7 @@ public:
 
     waypoints_to_storage.push_back(target_pose);
 
-    target_pose.position.z = -0.25 + (box_count - 1) * 0.22;
+    target_pose.position.z = (box_count - 1) * 0.22;
 
     waypoints_to_storage.push_back(target_pose);
 
@@ -632,6 +633,78 @@ public:
     move_group.execute(cartesian_plan);
 
   }
+
+  void moveToStorageSide2(uint box_count)
+  {
+    // Get the current set of joint values for the group.
+    std::vector<double> joint_group_positions;
+    current_state->copyJointGroupPositions(joint_model_group, joint_group_positions);
+
+    // STEP2: Turn Left (UGV view)
+    current_state = move_group.getCurrentState();
+    ros::Duration(0.5).sleep();
+    current_state = move_group.getCurrentState();
+    current_state->copyJointGroupPositions(joint_model_group, joint_group_positions);
+
+    joint_group_positions[0] = PI/2 - PI/2;  // Radian rotate 90 from Default Position
+
+    move_group.setJointValueTarget(joint_group_positions);
+    move_group.setPlanningTime(PLANNING_TIMEOUT);
+    move_group.setGoalJointTolerance(0.01);
+
+    ROS_INFO_NAMED("tutorial", "moveToStorageSide Step 2: Turn left %s", success ? "SUCCEEDED" : "FAILED");
+
+
+    #ifdef DEBUG
+      visual_tools.prompt("Press 'next' to front position");
+    #endif
+
+    move_group.move();                      // BLOCKING FUNCTION
+
+    // STEP4: Go to the storage
+
+    std::vector<geometry_msgs::Pose> waypoints_to_storage;
+
+    target_pose = move_group.getCurrentPose().pose; // Cartesian Path from the current position
+    ros::Duration(0.5).sleep();
+    target_pose = move_group.getCurrentPose().pose; // Cartesian Path from the current position
+
+    target_pose.position.x = 0.58;
+    target_pose.position.y = 0.1;
+    target_pose.position.z = 0.65;
+
+    waypoints_to_storage.push_back(target_pose);
+
+    target_pose.position.z = (box_count - 1) * 0.22;
+
+    waypoints_to_storage.push_back(target_pose);
+
+    move_group.setMaxVelocityScalingFactor(0.1);
+    move_group.setMaxAccelerationScalingFactor(0.1);
+    move_group.setPlanningTime(PLANNING_TIMEOUT);
+
+    moveit_msgs::RobotTrajectory trajectory_to_storage;
+    fraction = move_group.computeCartesianPath(waypoints_to_storage, eef_step, jump_threshold, trajectory_to_storage);
+    ROS_INFO_NAMED("tutorial", "moveToStorageSide Step 4: Cartesian To Storage (%.2f%% achieved)", fraction * 100.0);
+    cartesian_plan.trajectory_ = trajectory_to_storage;
+
+    // Visualize the plan in RViz
+    visual_tools.deleteAllMarkers();
+    visual_tools.publishText(text_pose, "Joint Space Goal", rvt::WHITE, rvt::XLARGE);
+    visual_tools.publishPath(waypoints_to_storage, rvt::LIME_GREEN, rvt::SMALL);
+    for (std::size_t i = 0; i < waypoints_to_storage.size(); ++i)
+      visual_tools.publishAxisLabeled(waypoints_to_storage[i], "pt" + std::to_string(i), rvt::SMALL);
+    visual_tools.trigger();
+
+    #ifdef DEBUG
+      visual_tools.prompt("Press 'next' to go down");
+    #endif
+
+    move_group.execute(cartesian_plan);
+
+  }
+
+  
 
   void moveFromCurrentState(float toX, float toY, float toZ)
   {
@@ -913,6 +986,60 @@ public:
       Container2.primitive_poses.push_back(pose_Container2);
       Container2.operation = Container2.ADD;
 
+      // ---------- Container3
+      moveit_msgs::CollisionObject Container3; // Define a collision object ROS message.
+      Container3.header.frame_id = move_group.getPlanningFrame();
+
+      Container3.id = "Container3"; // The id of the object is used to identify it.
+
+      shape_msgs::SolidPrimitive primitive_Container3; // Define UGV_base dimension (in meter)
+      primitive_Container3.type = primitive_Container1.BOX;
+      primitive_Container3.dimensions.resize(3);
+      primitive_Container3.dimensions[0] = 0.03;  // x right
+      primitive_Container3.dimensions[1] = 1.20;  // y front
+      primitive_Container3.dimensions[2] = 1.0;  // z up
+
+      geometry_msgs::Pose pose_Container3; // Define a pose for the Robot_bottom (specified relative to frame_id)
+      q.setRPY(0, 0, 0);
+      pose_Container3.orientation.x = q[0];
+      pose_Container3.orientation.y = q[1];
+      pose_Container3.orientation.z = q[2];
+      pose_Container3.orientation.w = q[3];
+      pose_Container3.position.x = primitive_Container3.dimensions[0]/2 + primitive_UGV_base.dimensions[0] / 2 + 0.33;
+      pose_Container3.position.y = -primitive_Container3.dimensions[1]/2 + 0.05/2 + 0.08 + 0.04;
+      pose_Container3.position.z = primitive_Container3.dimensions[2]/2 - 0.30 - 0.30;
+
+      Container3.primitives.push_back(primitive_Container3);
+      Container3.primitive_poses.push_back(pose_Container3);
+      Container3.operation = Container3.ADD;
+
+      // ---------- Container4
+      moveit_msgs::CollisionObject Container4; // Define a collision object ROS message.
+      Container4.header.frame_id = move_group.getPlanningFrame();
+
+      Container4.id = "Container4"; // The id of the object is used to identify it.
+
+      shape_msgs::SolidPrimitive primitive_Container4; // Define UGV_base dimension (in meter)
+      primitive_Container4.type = primitive_Container2.BOX;
+      primitive_Container4.dimensions.resize(3);
+      primitive_Container4.dimensions[0] = 0.03;  // x right
+      primitive_Container4.dimensions[1] = 0.95;  // y front
+      primitive_Container4.dimensions[2] = .80;  // z up
+
+      geometry_msgs::Pose pose_Container4; // Define a pose for the Robot_bottom (specified relative to frame_id)
+      q.setRPY(0, 0, 0);
+      pose_Container4.orientation.x = q[0];
+      pose_Container4.orientation.y = q[1];
+      pose_Container4.orientation.z = q[2];
+      pose_Container4.orientation.w = q[3];
+      pose_Container4.position.x = primitive_Container4.dimensions[0]/2 + 0.4;
+      pose_Container4.position.y = -0.58 - 0.15;
+      pose_Container4.position.z = primitive_Container4.dimensions[2]/2 - 0.30 - 0.30;
+
+      Container4.primitives.push_back(primitive_Container4);
+      Container4.primitive_poses.push_back(pose_Container4);
+      Container4.operation = Container4.ADD;
+
       // ---------- ground
       moveit_msgs::CollisionObject ground; // Define a collision object ROS message.
       ground.header.frame_id = move_group.getPlanningFrame(); // reference to end-effector frame
@@ -923,7 +1050,7 @@ public:
       primitive_ground.dimensions.resize(3);
       primitive_ground.dimensions[0] = 3;  // length (x)
       primitive_ground.dimensions[1] = 3;  // width  (y)
-      primitive_ground.dimensions[2] = 0.04;  // height (z)
+      primitive_ground.dimensions[2] = 0.001;  // height (z)
 
       geometry_msgs::Pose pose_ground; // Define a pose for the UGV_body (specified relative to frame_id)
       q.setRPY(0, 0, 0);
@@ -933,7 +1060,7 @@ public:
       pose_ground.orientation.w = q[3];
       pose_ground.position.x = 0;
       pose_ground.position.y = 0;
-      pose_ground.position.z = - primitive_ground.dimensions[2]/2 - primitive_UGV_base.dimensions[2];
+      pose_ground.position.z = - primitive_ground.dimensions[2]/2 - (primitive_UGV_base.dimensions[2] - BELT_BASE_HEIGHT);
 
       ground.primitives.push_back(primitive_ground);
       ground.primitive_poses.push_back(pose_ground);
@@ -947,6 +1074,8 @@ public:
       collision_robot_body.push_back(magnet_panel);
       collision_robot_body.push_back(Container1);
       collision_robot_body.push_back(Container2);
+      collision_robot_body.push_back(Container3);
+      collision_robot_body.push_back(Container4);
       collision_robot_body.push_back(ground);
       planning_scene_interface.addCollisionObjects(collision_robot_body); //add the collision object into the world
       ros::Duration(DELAY).sleep(); // wait to build the object before attaching to ee
