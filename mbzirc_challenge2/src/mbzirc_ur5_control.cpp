@@ -37,7 +37,7 @@
 #define PLANNING_TIMEOUT 2
 #define NUM_SUM 3      // to average the pose message
 #define NUM_DISCARD 10
-#define DIST_EE_TO_MAGNET 0.0627
+#define DIST_EE_TO_MAGNET 0.0750
 #define DIST_CAM_TO_EE 0
 #define DIST_LIDAR_TO_MAGNET 0
 #define Z_OFFSET 0.02
@@ -225,12 +225,15 @@ public:
       FLAG_SWITCH_TOUCHED = true;
       move_group.stop();
     }
-    else
+    else if (msg->data == false)
     {
       FLAG_SWITCH_TOUCHED = false;  // switch is deactivated
 
+    }else
+    {
       // do nothing
     }
+    
   }
 
   void readCamDataFlagCallback(const std_msgs::Bool::ConstPtr& msg)
@@ -493,7 +496,7 @@ public:
     joint_group_positions[2] = PI/4;
     joint_group_positions[3] = 2 * PI - PI/4;
     joint_group_positions[4] = -PI/2;
-    joint_group_positions[5] = PI/4;
+    joint_group_positions[5] = 0;
     move_group.setJointValueTarget(joint_group_positions);
     move_group.setMaxVelocityScalingFactor(0.3);
     move_group.setMaxAccelerationScalingFactor(0.3);
@@ -706,7 +709,7 @@ public:
     // Thrid create a IterativeParabolicTimeParameterization object
     trajectory_processing::IterativeParabolicTimeParameterization iptp;
     // Fourth compute computeTimeStamps
-    bool success = iptp.computeTimeStamps(rt, 0.03, 0.03);
+    bool success = iptp.computeTimeStamps(rt, 0.01, 0.01);
     rt.getRobotTrajectoryMsg(trajectory_down);
 
     ROS_INFO_NAMED("tutorial", "Visualizing CartesianPath down (%.2f%% achieved)", fraction * 100.0);
@@ -834,23 +837,23 @@ public:
       primitive_magnet_panel.type = primitive_magnet_panel.BOX;
       primitive_magnet_panel.dimensions.resize(3);
       primitive_magnet_panel.dimensions[0] = DIST_EE_TO_MAGNET;  // length (x)
-      primitive_magnet_panel.dimensions[1] = 0.11;  // width  (y)
-      primitive_magnet_panel.dimensions[2] = 0.16;  // height (z)
+      primitive_magnet_panel.dimensions[1] = 0.115;  // width  (y)
+      primitive_magnet_panel.dimensions[2] = 0.075;  // height (z)
 
       // magnetic panel
       geometry_msgs::Pose pose_magnet_panel; // Define a pose for the UGV_body (specified relative to frame_id)
       // q.setRPY(45, 0, 0);
       // q.normalize();
       // Rotate 45 degree about x-axis from https://quaternions.online/
-      pose_magnet_panel.orientation.x = 0.383;
+      pose_magnet_panel.orientation.x = 0.0;
       pose_magnet_panel.orientation.y = 0.0;
       pose_magnet_panel.orientation.z = 0.0;
-      pose_magnet_panel.orientation.w = 0.924;
+      pose_magnet_panel.orientation.w = 1.0;
 
       //note the axis of EE
       pose_magnet_panel.position.x = primitive_magnet_panel.dimensions[0]/2;
       pose_magnet_panel.position.y = 0.02475;
-      pose_magnet_panel.position.z = 0.02475;
+      pose_magnet_panel.position.z = 0;
 
       magnet_panel.primitives.push_back(primitive_magnet_panel);
       magnet_panel.primitive_poses.push_back(pose_magnet_panel);
@@ -894,7 +897,7 @@ public:
       primitive_Container2.dimensions.resize(3);
       primitive_Container2.dimensions[0] = 0.03;  // x right
       primitive_Container2.dimensions[1] = 0.95;  // y front
-      primitive_Container2.dimensions[2] = 1.0;  // z up
+      primitive_Container2.dimensions[2] = .80;  // z up
 
       geometry_msgs::Pose pose_Container2; // Define a pose for the Robot_bottom (specified relative to frame_id)
       q.setRPY(0, 0, 0);
@@ -962,21 +965,21 @@ public:
     primitive_brick.type = primitive_brick.BOX;
     primitive_brick.dimensions.resize(3);
     primitive_brick.dimensions[0] = 0.20;  // length (x)
-    primitive_brick.dimensions[1] = 0.20;  // width  (y)
+    primitive_brick.dimensions[2] = 0.20;  // width  (y)
 
     switch (color)
     {
     case RED:
-      primitive_brick.dimensions[2] = 0.30;  // Box length in meter
+      primitive_brick.dimensions[1] = 0.30;  // Box length in meter
       break;
     case GREEN:
-      primitive_brick.dimensions[2] = 0.60;  
+      primitive_brick.dimensions[1] = 0.60;  
       break;
     case BLUE:
-      primitive_brick.dimensions[2] = 1.20;  
+      primitive_brick.dimensions[1] = 1.20;  
       break;
     default:
-      primitive_brick.dimensions[2] = 1.80;  
+      primitive_brick.dimensions[1] = 1.80;  
       break;
     }
     
@@ -985,10 +988,10 @@ public:
     geometry_msgs::Pose pose_brick; // Define a pose for the UGV_body (specified relative to frame_id)
     // q.setRPY(0, 0, 0);
     // Rotate 45 degree about x-axis from https://quaternions.online/
-    pose_brick.orientation.x = 0.383;
+    pose_brick.orientation.x = 0.0;
     pose_brick.orientation.y = 0.0;
     pose_brick.orientation.z = 0.0;
-    pose_brick.orientation.w = 0.924;
+    pose_brick.orientation.w = 1.0;
     pose_brick.position.x = primitive_brick.dimensions[0]/2 + DIST_EE_TO_MAGNET;
     pose_brick.position.y = 0;
     pose_brick.position.z = 0;
