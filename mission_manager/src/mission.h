@@ -9,7 +9,7 @@
 using namespace std;
 
 struct mission_struct{
-    string mission_name = "";
+    int mission = -1;
 
     // mission type : ready = 0, move = 1, load = 2, unload = 3, path searching = 4, finish = 5 or not init = -1
     int mission_type = -1; 
@@ -52,21 +52,32 @@ public:
 
 };
 
+enum MISSION_SEQUENCE {
+    MISSION_READY,
+    MISSION_MOVE_TO_BRICK,
+    MISSION_LOAD_ORANGE_BRICKS,
+    MISSION_MOVE_TO_SEGMENT,
+    MISSION_UNLOAD_ORANGE_BRICKS,
+    MISSION_LOAD_MULTICOLOR_BRICKS,
+    MISSION_UNLOAD_MULTICOLOR_BRICKS,
+    MISSION_FINISH
+};
+
 enum UR_action {
     UR_ACTION_LOAD = 0,
     UR_ACTION_UNLOAD
 };
 
 enum Brick_color {
-    ORANGE = 1,
-    BLUE,
-    GREEN,
-    RED
+    COLOR_ORANGE = 1,
+    COLOR_BLUE,
+    COLOR_GREEN,
+    COLOR_RED
 };
 
 enum Container_side {
-    LEFT = 0,
-    RIGHT
+    CONTAINER_LEFT = 0,
+    CONTAINER_RIGHT
 };
 
 class Mission_preset{
@@ -87,6 +98,9 @@ private:
     int m_conveyor_left_unload_vel = -1 *m_conveyor_left_load_vel;
     int m_conveyor_right_load_vel = 3000;
     int m_conveyor_right_unload_vel = -1 *m_conveyor_right_load_vel;
+    int m_conveyor_defualt_unload_time = 50*1000; // 50 sec
+    int m_conveyor_defualt_move_back_time = 10*1000; // 10 sec
+    int m_conveyor_running_time = 10*1000; // 10 sec
 
     // FOR UR - ROBOT ARM
     string m_ur_target_node_name = "ur_control";
@@ -194,6 +208,26 @@ public:
 
     int get_conveyor_right_unload_vel() {
         return m_conveyor_right_unload_vel;
+    }
+
+    void set_conveyor_running_time(int _time_in_sec) {
+        m_conveyor_running_time = 1000*_time_in_sec;
+    }
+
+    int get_conveyor_running_time() {
+        return m_conveyor_running_time;
+    }
+
+    int get_conveyor_defualt_unload_time() {
+        return m_conveyor_defualt_unload_time;
+    }
+
+    int get_conveyor_defualt_move_back_time() {
+        return m_conveyor_defualt_move_back_time;
+    }
+
+    string get_ur_target_node_name() {
+        return m_ur_target_node_name;
     }
 
     void set_ur_action(int _action) {
