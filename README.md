@@ -3,15 +3,30 @@
 ## How to start up the 4 wheel steering robot
 
 ### Bring up the robot
-roslaunch mbzirc_wheel_control 4_wheel_control.launch 
+`roslaunch mbzirc_wheel_control 4_wheel_control.launch`
 
 ### Launch joystick launch file
-roslaunch mbzirc_wheel_control joy.launch
+`roslaunch mbzirc_wheel_control joy.launch`
 
 ### Turn on the odrives
+```
 rosservice call /back/odrive/calibrate_motors "{}" 
 rosservice call /front/odrive/calibrate_motors "{}" 
+```
 
+### Publish
+- DYNAMIXEL
+  - `/dynamixel_state(dynamixel_workbench_msgs/DynamixelStateList)`: States of connected DYNAMIXEL
+  - `/joint_states(sensor_msgs/JointState)`: Joint information about connected DYNAMIXEL
+- Hub motor
+  - `/front/left/raw_odom/velocity(std_msgs/Int32)`: Speeds of front left hub motor (unit: encoder counts/s, 1 rotation: 90counts)
+  - `/front/right/raw_odom/velocity(std_msgs/Int32)`: Speeds of front right hub motor
+  - `/back/left/raw_odom/velocity(std_msgs/Int32)`: Speeds of back left hub motor
+  - `/back/right/raw_odom/velocity(std_msgs/Int32)`: Speeds of back right hub motor
+  - `/front/left/raw_odom/encoder(std_msgs/Int32)`: Encoder counts of front left hub motor
+  - `/front/right/raw_odom/encoder(std_msgs/Int32)`: Encoder counts of front right hub motor
+  - `/back/left/raw_odom/encoder(std_msgs/Int32)`: Encoder counts of back left hub motor
+  - `/back/right/raw_odom/encoder(std_msgs/Int32)`: Encoder counts of back right hub motor
 
 ## Pre-requisite
 1. install universal_robot and ur_modern_driver packages following this tutorial http://wiki.ros.org/universal_robot/Tutorials/Getting%20Started%20with%20a%20Universal%20Robot%20and%20ROS-Industrial
