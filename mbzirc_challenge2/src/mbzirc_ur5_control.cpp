@@ -195,15 +195,63 @@ public:
 
   bool test(mission_manager::ur_move::Request  &req,
             mission_manager::ur_move::Response  &res)
-  {   res.success_or_fail = true;
+  {   gb_count_box += 1;
+      if (gb_count_box == 3){
+        res.success_or_fail = false;
+      }else{
+        res.success_or_fail = true;
+      }
+      
       std::cout << " req, target_node_name : " <<  req.target_node_name << std::endl;
       std::cout << " req, target_load_or_unload : " << req.target_load_or_unload << std::endl;
       std::cout << " req, target_brick_color_code : " << req.target_brick_color_code << std::endl;
       std::cout << " req, target_brick_container_side_left_right : " << req.target_brick_container_side_left_right << std::endl;
-      // if (req.target_brick_container_side_left_right == false)
-      // {
-      //   moveToDefault();
-      // }
+      // Get the current set of joint values for the group.
+      std::vector<double> joint_group_positions;
+      current_state->copyJointGroupPositions(joint_model_group, joint_group_positions);
+
+      // STEP2: Turn Left (UGV view)
+      current_state = move_group.getCurrentState();
+      ros::Duration(0.5).sleep();
+      current_state = move_group.getCurrentState();
+      current_state->copyJointGroupPositions(joint_model_group, joint_group_positions);
+
+      joint_group_positions[0] = PI/2 - PI/2;  // Radian rotate 90 from Default Position
+
+      move_group.setJointValueTarget(joint_group_positions);
+      move_group.setPlanningTime(PLANNING_TIMEOUT);
+      move_group.setGoalJointTolerance(0.01);
+
+      ROS_INFO_NAMED("tutorial", "moveToStorageSide Step 2: Turn left %s", success ? "SUCCEEDED" : "FAILED");
+
+
+      #ifdef DEBUG
+        visual_tools.prompt("Press 'next' to front position");
+      #endif
+
+      move_group.move();                      // BLOCKING FUNCTION
+
+      // STEP2: Turn Left (UGV view)
+      current_state = move_group.getCurrentState();
+      ros::Duration(0.5).sleep();
+      current_state = move_group.getCurrentState();
+      current_state->copyJointGroupPositions(joint_model_group, joint_group_positions);
+
+      joint_group_positions[0] = PI/2;  // Radian rotate 90 from Default Position
+
+      move_group.setJointValueTarget(joint_group_positions);
+      move_group.setPlanningTime(PLANNING_TIMEOUT);
+      move_group.setGoalJointTolerance(0.01);
+
+      ROS_INFO_NAMED("tutorial", "moveToStorageSide Step 2: Turn left %s", success ? "SUCCEEDED" : "FAILED");
+
+
+      #ifdef DEBUG
+        visual_tools.prompt("Press 'next' to front position");
+      #endif
+
+      move_group.move();                      // BLOCKING FUNCTION
+
       return true;
   }
 
@@ -599,7 +647,7 @@ public:
     ros::Duration(0.5).sleep();
     target_pose = move_group.getCurrentPose().pose; // Cartesian Path from the current position
 
-    target_pose.position.x = -0.58;
+    target_pose.position.x = -0.56;
     target_pose.position.y = -0.1;
     target_pose.position.z = 0.65;
 
@@ -669,7 +717,7 @@ public:
     ros::Duration(0.5).sleep();
     target_pose = move_group.getCurrentPose().pose; // Cartesian Path from the current position
 
-    target_pose.position.x = 0.58;
+    target_pose.position.x = 0.56;
     target_pose.position.y = 0.1;
     target_pose.position.z = 0.65;
 
@@ -1024,7 +1072,7 @@ public:
       primitive_Container4.dimensions.resize(3);
       primitive_Container4.dimensions[0] = 0.03;  // x right
       primitive_Container4.dimensions[1] = 0.95;  // y front
-      primitive_Container4.dimensions[2] = .80;  // z up
+      primitive_Container4.dimensions[2] = 1.00;  // z up
 
       geometry_msgs::Pose pose_Container4; // Define a pose for the Robot_bottom (specified relative to frame_id)
       q.setRPY(0, 0, 0);
@@ -1060,7 +1108,7 @@ public:
       pose_ground.orientation.w = q[3];
       pose_ground.position.x = 0;
       pose_ground.position.y = 0;
-      pose_ground.position.z = - primitive_ground.dimensions[2]/2 - (primitive_UGV_base.dimensions[2] - BELT_BASE_HEIGHT);
+      pose_ground.position.z = - primitive_ground.dimensions[2]/2 - (primitive_UGV_base.dimensions[2]);
 
       ground.primitives.push_back(primitive_ground);
       ground.primitive_poses.push_back(pose_ground);
@@ -1113,7 +1161,6 @@ public:
     }
     
 
-    // magnetic panel
     geometry_msgs::Pose pose_brick; // Define a pose for the UGV_body (specified relative to frame_id)
     // q.setRPY(0, 0, 0);
     // Rotate 45 degree about x-axis from https://quaternions.online/
