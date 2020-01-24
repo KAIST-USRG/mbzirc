@@ -14,7 +14,7 @@ rosservice call /back/odrive/calibrate_motors "{}"
 rosservice call /front/odrive/calibrate_motors "{}" 
 ```
 
-### Publish
+## Publish
 - DYNAMIXEL
   - `/dynamixel_state(dynamixel_workbench_msgs/DynamixelStateList)`: States of connected DYNAMIXEL
   - `/joint_states(sensor_msgs/JointState)`: Joint information about connected DYNAMIXEL
