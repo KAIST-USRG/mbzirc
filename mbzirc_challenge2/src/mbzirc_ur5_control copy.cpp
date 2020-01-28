@@ -20,13 +20,15 @@
 #include <moveit_msgs/CollisionObject.h>
 
 // srv
-// #include <mbzirc_challenge2/ur_move.h>
-#include <mission_manager/ur_move.h>
+#include "mission_manager/ur_move.h"
+#include "mbzirc_challenge2/go_to_brick.h"
 
+// msg
+#include <std_msgs/Bool.h>
+#include <std_msgs/UInt16.h>
+#include <std_msgs/Float32.h>
+#include <geometry_msgs/Pose.h>
 
-#include "std_msgs/Bool.h"
-#include "std_msgs/UInt16.h"
-#include "std_msgs/Float32.h"
 #include <tf/transform_broadcaster.h>
 
 
@@ -85,7 +87,7 @@ private:
 
 
   // for checking success of planning
-  bool success;
+  bool success{};
 
   // for Cartesian Path
   const double jump_threshold = 0.0; // read only.
@@ -93,12 +95,15 @@ private:
   double PI = 3.141592653589793;
   double fraction;
 
+  // Publisher
   ros::Publisher moveToStorageSide_finished_flag_pub;
   ros::Publisher moveToDefault_finished_flag_pub;
   ros::Publisher avg_pose_pub;
   ros::Publisher box_count_pub;
   ros::Publisher magnet_state_pub;
+  ros::Publisher readCamData_flag_pub;
 
+  // Subscriber
   ros::Subscriber pose_from_cam_sub;
   ros::Subscriber moveToStorageSide_flag_sub;
   ros::Subscriber moveToDefault_flag_sub;
@@ -109,7 +114,24 @@ private:
   ros::Subscriber sensor_range_sub;
   ros::Subscriber switch_state_sub;
 
-  ros::ServiceServer service_tmp;
+  // msg
+  std_msgs::Bool moveToStorageSide_flag_msg;
+  std_msgs::Bool readCamData_flag_msg;
+  std_msgs::Bool moveToDefault_flag_msg;
+  std_msgs::UInt16 box_count_msg;
+  std_msgs::Bool magnet_state_msg;
+  std_msgs::Bool moveToStorageSide_finished_flag_msg;
+  std_msgs::Bool moveToDefault_finished_flag_msg;
+
+  // ServiceClient
+  ros::ServiceClient go_to_brick_sc;
+
+  // ServiceServer
+  ros::ServiceServer ur_move_ss;
+  ros::ServiceServer go_to_brick_ss;
+
+  // Service
+  mbzirc_challenge2::go_to_brick go_to_brick_srv;
 
   ros::NodeHandle node_handle;
   ros::NodeHandle nh;
@@ -125,13 +147,7 @@ private:
 
   geometry_msgs::Pose avg_pose_msg; // absolute position w.r.t UR5 base
 
-  std_msgs::Bool moveToStorageSide_flag_msg;
-  std_msgs::Bool readCamData_flag_msg;
-  std_msgs::Bool moveToDefault_flag_msg;
-  std_msgs::UInt16 box_count_msg;
-  std_msgs::Bool magnet_state_msg;
-  std_msgs::Bool moveToStorageSide_finished_flag_msg;
-  std_msgs::Bool moveToDefault_finished_flag_msg;
+
 
 public:
 
@@ -171,17 +187,22 @@ public:
     avg_pose_pub = nh.advertise<geometry_msgs::Pose>("/avg_pose", 10);
     box_count_pub = nh.advertise<std_msgs::UInt16>("/box_count", 10);
     magnet_state_pub = nh.advertise<std_msgs::Bool>("/magnet_on", 10);
+    readCamData_flag_pub = nh.advertise<std_msgs::Bool>("/readCamData_Flag", 10);
 
     pose_from_cam_sub = nh.subscribe("/brick_pose", 10, &Arm::calcAvgCallback, this);
     moveToStorageSide_flag_sub = nh.subscribe("/moveToStorageSide_flag", 10, &Arm::moveToStorageSideFlagCallback, this);
     moveToDefault_flag_sub = nh.subscribe("/moveToDefault_flag", 10, &Arm::moveToDafaultFlagCallback, this);
-    moveXYZ_sub = nh.subscribe("/avg_pose", 10, &Arm::_moveXYZCallback, this);
+    // moveXYZ_sub = nh.subscribe("/avg_pose", 10, &Arm::_moveXYZCallback, this);
     readCamData_flag_sub = nh.subscribe("/readCamData_Flag", 100, &Arm::readCamDataFlagCallback, this);
     manual_moveXVZ_sub = nh.subscribe("/manual_moveXVZ", 10, &Arm::manual_moveXYZ, this);
     // sensor_range_sub = nh.subscribe("/sensor_range", 1, &Arm::moveDownCallBack, this);
     switch_state_sub = nh.subscribe("/switch_state", 1, &Arm::switchStateCallback, this);
 
-    service_tmp = nh.advertiseService("ur_move", &Arm::test, this);
+    // Service Client
+    go_to_brick_sc = nh.serviceClient<mbzirc_challenge2::go_to_brick>("go_to_brick");
+    // Service Server
+    ur_move_ss = nh.advertiseService("ur_move", &Arm::test, this);
+    go_to_brick_ss = nh.advertiseService("go_to_brick", &Arm::_moveXYZCallback, this);
 
     ros::Duration(1).sleep();
     // Turn on Magnet
@@ -193,64 +214,49 @@ public:
 
   bool test(mission_manager::ur_move::Request  &req,
             mission_manager::ur_move::Response  &res)
-  {   gb_count_box += 1;
-      if (gb_count_box == 3){
-        res.success_or_fail = 0;
-      }else{
-        res.success_or_fail = 1;
+  {    
+    // read_data_from_camera
+    readCamData_flag_msg.data = true;
+    readCamData_flag_pub.publish(readCamData_flag_msg);
+
+    geometry_msgs::PoseConstPtr brick_pose_msg = ros::topic::waitForMessage<geometry_msgs::Pose>("/avg_pose");
+    // std_msgs::BoolConstPtr test_msg = ros::topic::waitForMessage<std_msgs::Bool>("/moveToDefault_finish_flag");
+
+    ROS_INFO("brick_pose_msg: x = %lf, y = %lf, z = %lf", brick_pose_msg->position.x, brick_pose_msg->position.y, brick_pose_msg->position.z);
+    go_to_brick_srv.request.x = brick_pose_msg->position.x;
+    go_to_brick_srv.request.y = brick_pose_msg->position.y;
+    go_to_brick_srv.request.z = brick_pose_msg->position.z;
+    go_to_brick_srv.request.qx = brick_pose_msg->orientation.x;
+    go_to_brick_srv.request.qy = brick_pose_msg->orientation.y;
+    go_to_brick_srv.request.qz = brick_pose_msg->orientation.z;
+    go_to_brick_srv.request.qw = brick_pose_msg->orientation.w;
+    
+    // Check if that position is in workspace
+    // Go to get the brick
+    // Go back to default
+    if(go_to_brick_sc.call(go_to_brick_srv)) 
+    {
+      std::cout << "Response : " << go_to_brick_srv.response.success << std::endl;
+      if (!go_to_brick_srv.response.success)  // failed to pick up
+      {
+        // do something
+      }else if (!go_to_brick_srv.response.workspace_reachable) // failed to reach the brick
+      {
+        // Tell mission maneger
+        res.workspace_reachable = false; 
+        return true;
       }
-      
-      std::cout << " req, target_node_name : " <<  req.target_node_name << std::endl;
-      std::cout << " req, target_load_or_unload : " << req.target_load_or_unload << std::endl;
-      std::cout << " req, target_brick_color_code : " << req.target_brick_color_code << std::endl;
-      std::cout << " req, target_brick_container_side_left_right : " << req.target_brick_container_side_left_right << std::endl;
-      // Get the current set of joint values for the group.
-      std::vector<double> joint_group_positions;
-      current_state->copyJointGroupPositions(joint_model_group, joint_group_positions);
+    }
+    else {  // fail to request service
+      std::cout << "Failed to call service" << std::endl;
+      return false;
+    }
 
-      // STEP2: Turn Left (UGV view)
-      current_state = move_group.getCurrentState();
-      ros::Duration(0.5).sleep();
-      current_state = move_group.getCurrentState();
-      current_state->copyJointGroupPositions(joint_model_group, joint_group_positions);
+    // Go to container and place the brick
+    
 
-      joint_group_positions[0] = PI/2 - PI/2;  // Radian rotate 90 from Default Position
-
-      move_group.setJointValueTarget(joint_group_positions);
-      move_group.setPlanningTime(PLANNING_TIMEOUT);
-      move_group.setGoalJointTolerance(0.01);
-
-      ROS_INFO_NAMED("tutorial", "moveToStorageSide Step 2: Turn left %s", success ? "SUCCEEDED" : "FAILED");
-
-
-      #ifdef DEBUG
-        visual_tools.prompt("Press 'next' to front position");
-      #endif
-
-      move_group.move();                      // BLOCKING FUNCTION
-
-      // STEP2: Turn Left (UGV view)
-      current_state = move_group.getCurrentState();
-      ros::Duration(0.5).sleep();
-      current_state = move_group.getCurrentState();
-      current_state->copyJointGroupPositions(joint_model_group, joint_group_positions);
-
-      joint_group_positions[0] = PI/2;  // Radian rotate 90 from Default Position
-
-      move_group.setJointValueTarget(joint_group_positions);
-      move_group.setPlanningTime(PLANNING_TIMEOUT);
-      move_group.setGoalJointTolerance(0.01);
-
-      ROS_INFO_NAMED("tutorial", "moveToStorageSide Step 2: Turn left %s", success ? "SUCCEEDED" : "FAILED");
-
-
-      #ifdef DEBUG
-        visual_tools.prompt("Press 'next' to front position");
-      #endif
-
-      move_group.move();                      // BLOCKING FUNCTION
-
-      return true;
+    // Go back to default
+    return true;
   }
 
   void magnetStateCallBack(const std_msgs::Bool::ConstPtr& msg)
@@ -323,7 +329,7 @@ public:
 
       }else{ // picking up should start from DEFAULT position
         int n = NUM_SUM;
-        
+
         avg_pose_msg.position.x = gb_x_sum/n;
         avg_pose_msg.position.y = gb_y_sum/n;
         avg_pose_msg.position.z = gb_z_sum/n;
@@ -334,8 +340,6 @@ public:
         ROS_INFO("x = %lf, y = %lf, z = %lf", avg_pose_msg.position.x, avg_pose_msg.position.y, avg_pose_msg.position.z);
 
         avg_pose_pub.publish(avg_pose_msg);
-
-
 
         FLAG_READ_CAM_DATA = false;
 
@@ -349,6 +353,7 @@ public:
 
         gb_count_pose_msg = 0; // reset the counter of data to be averaged
 
+
       }
     }else{
       // DON'T get the stream data from camera and clear garbage data
@@ -359,10 +364,13 @@ public:
       gb_yq_sum = 0;
       gb_zq_sum = 0;
       gb_wq_sum = 0;
+
     }
   }
 
-  void _moveXYZCallback(const geometry_msgs::Pose::ConstPtr& msg)
+  // void _moveXYZCallback(const geometry_msgs::Pose::ConstPtr& msg)
+  bool _moveXYZCallback(mbzirc_challenge2::go_to_brick::Request  &req,
+                        mbzirc_challenge2::go_to_brick::Response  &res)
   {
     // 4 steps
     // Step 1: Rotate the magnetic panel
@@ -375,14 +383,18 @@ public:
 
     // convert quaternion to roll, pitch, yaw
 
-    tf::Quaternion q_temp(
+    tf::Quaternion q_temp{
         // Note that norm of this Quaternion needs to be ONE
         // Otherwise, it's inaccurate.
-        msg->orientation.x,
-        msg->orientation.y,
-        msg->orientation.z,
-        msg->orientation.w
-        );
+        req.qx,
+        req.qy,
+        req.qz,
+        req.qw
+        // msg->orientation.x,
+        // msg->orientation.y,
+        // msg->orientation.z,
+        // msg->orientation.w
+    };
 
     tf::Matrix3x3 m(q_temp);
     double roll, pitch, yaw;
@@ -402,6 +414,14 @@ public:
 
     success = (move_group.plan(my_plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS);
     ROS_INFO_NAMED("tutorial", "Visualizing Initial joint plan (joint space goal) %s", success ? "" : "FAILED");
+
+    if(!success)  // Don't proceed if cannot reach the position
+    {
+      res.workspace_reachable = false;
+      res.success = false;
+      return true;
+    }
+      
     // Visualize the plan in RViz
     visual_tools.deleteAllMarkers();
     visual_tools.publishText(text_pose, "Joint Space Goal", rvt::WHITE, rvt::XLARGE);
@@ -425,11 +445,15 @@ public:
     target_pose = move_group.getCurrentPose().pose; // Cartesian Path from the current position
     ros::Duration(0.5).sleep();
     target_pose = move_group.getCurrentPose().pose; // Cartesian Path from the current position
-    target_pose.position.z = target_pose.position.z - (msg->position.z / 2);
+    // target_pose.position.z = target_pose.position.z - (msg->position.z / 2);
+    target_pose.position.z = target_pose.position.z - (req.z / 2);
     waypoints_down.push_back(target_pose);
-    target_pose.position.x = target_pose.position.x + msg->position.x;
-    target_pose.position.y = target_pose.position.y - msg->position.y + DIST_CAM_TO_EE;
-    target_pose.position.z = target_pose.position.z - (msg->position.z / 2) + DIST_LIDAR_TO_MAGNET + Z_OFFSET;
+    // target_pose.position.x = target_pose.position.x + msg->position.x;
+    // target_pose.position.y = target_pose.position.y - msg->position.y + DIST_CAM_TO_EE;
+    // target_pose.position.z = target_pose.position.z - (msg->position.z / 2) + DIST_LIDAR_TO_MAGNET + Z_OFFSET;
+    target_pose.position.x = target_pose.position.x + req.x;
+    target_pose.position.y = target_pose.position.y - req.y + DIST_CAM_TO_EE;
+    target_pose.position.z = target_pose.position.z - (req.z / 2) + DIST_LIDAR_TO_MAGNET + Z_OFFSET;
     
     waypoints_down.push_back(target_pose);
 
@@ -440,6 +464,13 @@ public:
     moveit_msgs::RobotTrajectory trajectory_down;
     fraction = move_group.computeCartesianPath(waypoints_down, eef_step, jump_threshold, trajectory_down);
     ROS_INFO_NAMED("tutorial", "Step 2: Move close to the brick (%.2f%% achieved)", fraction * 100.0);
+    if(fraction < 1.0)  // Don't proceed if cannot reach the position
+    {
+      res.workspace_reachable = false;
+      res.success = false;
+      return true;
+    }
+
     cartesian_plan.trajectory_ = trajectory_down;
 
     // Visualize the plan in RViz
@@ -475,7 +506,9 @@ public:
     moveToDefault();
     moveToDefault_finished_flag_msg.data = true;
     moveToDefault_finished_flag_pub.publish(moveToDefault_finished_flag_msg); // let the planner know that the arm is at default position 
-
+    res.success = true;
+    res.workspace_reachable = true;
+    return true;
   }
 
   void moveToStorageSideFlagCallback(const std_msgs::Bool::ConstPtr& msg)
@@ -1120,7 +1153,7 @@ public:
       collision_robot_body.push_back(magnet_panel);
       collision_robot_body.push_back(Container1);
       collision_robot_body.push_back(Container2);
-      collision_robot_body.push_back(Container3);
+      // collision_robot_body.push_back(Container3);
       collision_robot_body.push_back(Container4);
       collision_robot_body.push_back(ground);
       planning_scene_interface.addCollisionObjects(collision_robot_body); //add the collision object into the world
@@ -1197,7 +1230,7 @@ public:
 int main(int argc, char** argv)
 {
   ros::init(argc, argv, "mbzirc_ur5_control");
-  ros::AsyncSpinner spinner(2);
+  ros::AsyncSpinner spinner(3);
   spinner.start();
   Arm mbzircArm;
   ros::waitForShutdown();
