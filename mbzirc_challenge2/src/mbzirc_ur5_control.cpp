@@ -211,7 +211,7 @@ public:
     pose_from_cam_sub = nh.subscribe("/brick_pose", 10, &Arm::calcAvgCallback, this);
     
     moveToDefault_flag_sub = nh.subscribe("/moveToDefault_flag", 10, &Arm::moveToDafaultFlagCallback, this);
-    // moveXYZ_sub = nh.subscribe("/avg_pose", 10, &Arm::_moveXYZCallback, this);
+    // moveXYZ_sub = nh.subscribe("avg_pose", 10, &Arm::_moveXYZCallback, this);
     readCamData_flag_sub = nh.subscribe("/readCamData_Flag", 100, &Arm::readCamDataFlagCallback, this);
     manual_moveXVZ_sub = nh.subscribe("/manual_moveXVZ", 10, &Arm::manual_moveXYZ, this);
     switch_state_sub = nh.subscribe("/switch_state", 1, &Arm::switchStateCallback, this);
@@ -224,13 +224,13 @@ public:
     moveToStorageSide_flag_sub = nh.subscribe("/moveToStorageSide_flag", 10, &Arm::moveToStorageSideFlagCallback, this);
 
     // Service Client
-    go_to_brick_sc = nh.serviceClient<mbzirc_challenge2::go_to_brick>("go_to_brick");
-    place_in_container_sc = nh.serviceClient<mbzirc_challenge2::place_in_container>("place_in_container");
+    go_to_brick_sc = nh.serviceClient<mbzirc_challenge2::go_to_brick>("/go_to_brick");
+    place_in_container_sc = nh.serviceClient<mbzirc_challenge2::place_in_container>("/place_in_container");
 
     // Service Server
     ur_move_ss = nh.advertiseService("ur_move", &Arm::urMoveCallback, this);
-    go_to_brick_ss = nh.advertiseService("go_to_brick", &Arm::goToBrickServiceCallback, this);
-    place_in_container_ss = nh.advertiseService("place_in_container", &Arm::placeInContainerServiceCallback, this);
+    go_to_brick_ss = nh.advertiseService("/go_to_brick", &Arm::goToBrickServiceCallback, this);
+    place_in_container_ss = nh.advertiseService("/place_in_container", &Arm::placeInContainerServiceCallback, this);
 
     ros::Duration(1).sleep();
     // Turn on Magnet
@@ -243,18 +243,20 @@ public:
   bool urMoveCallback(mission_manager::ur_move::Request  &req,
                        mission_manager::ur_move::Response  &res)
   {    
-    // ====================== visual servo to align camera with bricks ====================== //
-    // align XY
-    ROS_INFO("// ====================== urMoveCallback ====================== //");
-
-    // align yaw angle
+    /*  The service server to communicate with mission_manager (central planner)
+    *
+    */
+    
+    // ====================== waiting camera node to command for visual servoing  ====================== //
+    std_msgs::BoolConstPtr read_cam_flag_msg = ros::topic::waitForMessage<std_msgs::Bool>("/readCamData_Flag");
+    ROS_INFO("// ====================== recieve the read_cam_flag_msg ====================== //");
 
     // ====================== read data from camera  ====================== //
     readCamData_flag_msg.data = true;
     readCamData_flag_pub.publish(readCamData_flag_msg);
 
     geometry_msgs::PoseConstPtr brick_pose_msg = ros::topic::waitForMessage<geometry_msgs::Pose>("/avg_pose");
-
+    ROS_INFO("// ====================== recieve the brick_pose_msg ====================== //");
     //  ====================== getting the brick  ====================== //
     //  1) check the workspace_reachable
     //  2) go to get the brick
@@ -1484,7 +1486,7 @@ public:
 int main(int argc, char** argv)
 {
   ros::init(argc, argv, "mbzirc_ur5_control");
-  ros::AsyncSpinner spinner(3);
+  ros::AsyncSpinner spinner(4);
   spinner.start();
   Arm mbzircArm;
   ros::waitForShutdown();
