@@ -45,14 +45,14 @@
 #define BELT_BASE_HEIGHT      0.26
 
 // color code
-#define RED     4
-#define GREEN   3
-#define BLUE    2
-#define ORANGE  1
+#define RED                   4
+#define GREEN                 3
+#define BLUE                  2
+#define ORANGE                1
 
 // side code
-#define LEFT    0
-#define RIGHT   1
+#define LEFT                  0
+#define RIGHT                 1
 
 
 namespace rvt = rviz_visual_tools;
@@ -62,114 +62,116 @@ tf2::Quaternion q;
 
 // FLAG for robot motion
 
-bool FLAG_READ_CAM_DATA = false;    // Should the arm read message from camera?
-bool FLAG_SWITCH_TOUCHED = false;
-bool FLAG_SWITCH_RESET = true;
-bool FLAG_MAGNET_ON = true;      // Is the magnet on?
+bool FLAG_READ_CAM_DATA   = false;    // Should the arm read message from camera?
+bool FLAG_SWITCH_TOUCHED  = false;
+bool FLAG_SWITCH_RESET    = true;
+bool FLAG_MAGNET_ON       = true;      // Is the magnet on?
 
 
-int gb_count_pose_msg = 0;
-int gb_discard_noise = 0;
-int gb_count_move = 0;  // 0 for moveXY, 1 for moveZ
-int gb_count_box = 0;
-float gb_x_sum = 0;
-float gb_y_sum = 0;
-float gb_z_sum = 0;
-float gb_xq_sum = 0;
-float gb_yq_sum = 0;
-float gb_zq_sum = 0;
-float gb_wq_sum = 0;
+int   gb_count_pose_msg = 0;
+int   gb_discard_noise  = 0;
+int   gb_count_move     = 0;  // 0 for moveXY, 1 for moveZ
+int   gb_count_box      = 0;
+float gb_x_sum          = 0;
+float gb_y_sum          = 0;
+float gb_z_sum          = 0;
+float gb_xq_sum         = 0;
+float gb_yq_sum         = 0;
+float gb_zq_sum         = 0;
+float gb_wq_sum         = 0;
 
 
 class Arm{
 private:
-  moveit::planning_interface::MoveGroupInterface::Plan my_plan;
+  // Initialization
   moveit::planning_interface::MoveGroupInterface::Plan cartesian_plan;
+  moveit::planning_interface::MoveGroupInterface::Plan my_plan;
+  moveit::planning_interface::MoveGroupInterface move_group;
+  moveit_visual_tools::MoveItVisualTools visual_tools;
+  moveit::core::RobotStatePtr current_state;
+  const robot_state::JointModelGroup* joint_model_group;
+  Eigen::Isometry3d text_pose;
+
   moveit::planning_interface::PlanningSceneInterface planning_scene_interface;
   trajectory_processing::IterativeParabolicTimeParameterization iptp;
 
   moveit_msgs::CollisionObject brick; // Define a collision object ROS message.
 
-
-  // for checking success of planning
-  // bool success{};
-
   // for Cartesian Path
   const double jump_threshold = 0.0; // read only.
-  const double eef_step = 0.01;      // read only.
-  double PI = 3.141592653589793;
-  double fraction{};
+  const double eef_step       = 0.01;      // read only.
+  const double PI             = 3.141592653589793;
+  double       fraction       = 0.0;
 
   // Publisher
-  ros::Publisher moveToStorageSide_finished_flag_pub;
-  ros::Publisher moveToDefault_finished_flag_pub;
+
   ros::Publisher avg_pose_pub;
   ros::Publisher box_count_pub;
-  ros::Publisher magnet_state_pub;
-  ros::Publisher readCamData_flag_pub;
   ros::Publisher finish_stop_xy_pub;
   ros::Publisher finish_stop_yaw_pub;
+  ros::Publisher magnet_state_pub;  
+  ros::Publisher moveToStorageSide_finished_flag_pub;
+  ros::Publisher moveToDefault_finished_flag_pub;
+  ros::Publisher readCamData_flag_pub;
+  
 
   // Subscriber
-  ros::Subscriber pose_from_cam_sub;
-  ros::Subscriber moveToStorageSide_flag_sub;
-  ros::Subscriber moveToDefault_flag_sub;
-  ros::Subscriber moveXYZ_sub;
-  ros::Subscriber readCamData_flag_sub;
-  ros::Subscriber manual_moveXVZ_sub;
+  
   ros::Subscriber magnet_state_sub;
-  ros::Subscriber sensor_range_sub;
-  ros::Subscriber switch_state_sub;
+  ros::Subscriber manual_moveXVZ_sub;
+  ros::Subscriber moveToDefault_flag_sub;
+  ros::Subscriber moveToStorageSide_flag_sub;
+  ros::Subscriber moveXYZ_sub;
   ros::Subscriber plate_xy_move_sub;
   ros::Subscriber plate_xy_offset_sub;
   ros::Subscriber plate_yaw_incorrect_sub;
   ros::Subscriber plate_yaw_move_sub;
+  ros::Subscriber pose_from_cam_sub;
+  ros::Subscriber readCamData_flag_sub;
+  ros::Subscriber sensor_range_sub;
   ros::Subscriber servo_stop_sub;
+  ros::Subscriber switch_state_sub;
 
 
   // msg
-  std_msgs::Bool moveToStorageSide_flag_msg;
-  std_msgs::Bool readCamData_flag_msg;
-  std_msgs::Bool moveToDefault_flag_msg;
-  std_msgs::Int16 box_count_msg;
-  std_msgs::Bool magnet_state_msg;
-  std_msgs::Bool moveToStorageSide_finished_flag_msg;
-  std_msgs::Bool moveToDefault_finished_flag_msg;
   std_msgs::Bool finish_stop_xy_msg;
   std_msgs::Bool finish_stop_yaw_msg;
+  std_msgs::Bool magnet_state_msg;
+  std_msgs::Bool moveToDefault_finished_flag_msg;
+  std_msgs::Bool moveToDefault_flag_msg;
+  std_msgs::Bool moveToStorageSide_finished_flag_msg;
+  std_msgs::Bool moveToStorageSide_flag_msg;
+  std_msgs::Bool readCamData_flag_msg;
+
+  std_msgs::Int16 box_count_msg;
+
+  geometry_msgs::Pose target_pose;
+  geometry_msgs::Pose avg_pose_msg; // absolute position w.r.t UR5 base
 
   // ServiceClient
   ros::ServiceClient go_to_brick_sc;
   ros::ServiceClient place_in_container_sc;
 
   // ServiceServer
-  ros::ServiceServer ur_move_ss;
   ros::ServiceServer go_to_brick_ss;
   ros::ServiceServer place_in_container_ss;
+  ros::ServiceServer ur_move_ss;          // request is from mission_manager node
+
 
   // Service
   mbzirc_challenge2::go_to_brick go_to_brick_srv;
   mbzirc_challenge2::place_in_container place_in_container_srv;
 
-  ros::NodeHandle node_handle;
+  // Node Handle
+  // ros::NodeHandle node_handle;
   ros::NodeHandle nh;
 
-  moveit::planning_interface::MoveGroupInterface move_group;
-  moveit_visual_tools::MoveItVisualTools visual_tools;
-  moveit::core::RobotStatePtr current_state;
-  geometry_msgs::Pose target_pose;
-
-
-  const robot_state::JointModelGroup* joint_model_group;
-  Eigen::Isometry3d text_pose;
-
-  geometry_msgs::Pose avg_pose_msg; // absolute position w.r.t UR5 base
 
 public:
 
   Arm():nh("~"), move_group("manipulator"), visual_tools("base_link") {
 
-    // Initialization
+    // ========================  Initialization
     const std::string PLANNING_GROUP = "manipulator";
     robot_model_loader::RobotModelLoader robot_model_loader("robot_description");
     robot_model::RobotModelPtr robot_model = robot_model_loader.getModel();
@@ -196,29 +198,31 @@ public:
     text_pose = Eigen::Isometry3d::Identity();
     initWall();
 
-    // Node Communications
-
-    moveToStorageSide_finished_flag_pub = nh.advertise<std_msgs::Bool>("/moveToStorageSide_finish_flag", 10);
-    moveToDefault_finished_flag_pub = nh.advertise<std_msgs::Bool>("/moveToDefault_finish_flag", 10);
-    avg_pose_pub = nh.advertise<geometry_msgs::Pose>("/avg_pose", 10);
+    // ========================  Node Communications
+    // Publisher
+    avg_pose_pub  = nh.advertise<geometry_msgs::Pose>("/avg_pose", 10);
     box_count_pub = nh.advertise<std_msgs::Int16>("/box_count", 10);
-    magnet_state_pub = nh.advertise<std_msgs::Bool>("/magnet_on", 10);
-    readCamData_flag_pub = nh.advertise<std_msgs::Bool>("/readCamData_Flag", 10);
     finish_stop_xy_pub = nh.advertise<std_msgs::Bool>("/finish_stop_xy", 10);
     finish_stop_yaw_pub = nh.advertise<std_msgs::Bool>("/finish_stop_yaw", 10);
+    magnet_state_pub = nh.advertise<std_msgs::Bool>("/magnet_on", 10);
+    moveToStorageSide_finished_flag_pub = nh.advertise<std_msgs::Bool>("/moveToStorageSide_finish_flag", 10);
+    moveToDefault_finished_flag_pub = nh.advertise<std_msgs::Bool>("/moveToDefault_finish_flag", 10);
+    readCamData_flag_pub = nh.advertise<std_msgs::Bool>("/readCamData_Flag", 10);
 
 
-    pose_from_cam_sub = nh.subscribe("/brick_pose", 10, &Arm::calcAvgCallback, this);
+    // Subscriber
     
-    moveToDefault_flag_sub = nh.subscribe("/moveToDefault_flag", 10, &Arm::moveToDafaultFlagCallback, this);
-    // moveXYZ_sub = nh.subscribe("avg_pose", 10, &Arm::_moveXYZCallback, this);
-    readCamData_flag_sub = nh.subscribe("/readCamData_Flag", 100, &Arm::readCamDataFlagCallback, this);
     manual_moveXVZ_sub = nh.subscribe("/manual_moveXVZ", 10, &Arm::manual_moveXYZ, this);
-    switch_state_sub = nh.subscribe("/switch_state", 1, &Arm::switchStateCallback, this);
-    servo_stop_sub = nh.subscribe("/stop", 1, &Arm::servoStopCallback, this);
+    moveToDefault_flag_sub = nh.subscribe("/moveToDefault_flag", 10, &Arm::moveToDafaultFlagCallback, this);
     plate_xy_offset_sub = nh.subscribe("/plate_xy_offset", 1, &Arm::plateXYOffsetCallback, this);
     plate_yaw_incorrect_sub = nh.subscribe("/plate_yaw_incorrect", 1, &Arm::plateYawIncorrectCallback, this);
     plate_yaw_move_sub = nh.subscribe("/plate_yaw_move", 1, &Arm::plateYawMoveCallback, this);
+    pose_from_cam_sub = nh.subscribe("/brick_pose", 10, &Arm::calcAvgCallback, this);
+    // moveXYZ_sub = nh.subscribe("avg_pose", 10, &Arm::_moveXYZCallback, this);
+    readCamData_flag_sub = nh.subscribe("/readCamData_Flag", 100, &Arm::readCamDataFlagCallback, this);
+    servo_stop_sub = nh.subscribe("/stop", 1, &Arm::servoStopCallback, this);
+    switch_state_sub = nh.subscribe("/switch_state", 1, &Arm::switchStateCallback, this);
+    
 
     // DEBUG
     moveToStorageSide_flag_sub = nh.subscribe("/moveToStorageSide_flag", 10, &Arm::moveToStorageSideFlagCallback, this);
@@ -228,23 +232,24 @@ public:
     place_in_container_sc = nh.serviceClient<mbzirc_challenge2::place_in_container>("/place_in_container");
 
     // Service Server
+    go_to_brick_ss = nh.advertiseService("/go_to_brick", &Arm::_goToBrickServiceCallback, this);
+    place_in_container_ss = nh.advertiseService("/place_in_container", &Arm::_placeInContainerServiceCallback, this);
     ur_move_ss = nh.advertiseService("ur_move", &Arm::urMoveCallback, this);
-    go_to_brick_ss = nh.advertiseService("/go_to_brick", &Arm::goToBrickServiceCallback, this);
-    place_in_container_ss = nh.advertiseService("/place_in_container", &Arm::placeInContainerServiceCallback, this);
+
 
     ros::Duration(1).sleep();
     // Turn on Magnet
     magnet_state_msg.data = true;
     magnet_state_pub.publish(magnet_state_msg);
-    ROS_INFO("MAGNET_ON");
+    ROS_INFO("Initialize: MAGNET_ON");
 
   }
 
+  // ==================== Service Callback Function ==================== //
   bool urMoveCallback(mission_manager::ur_move::Request  &req,
                        mission_manager::ur_move::Response  &res)
   {    
     /*  The service server to communicate with mission_manager (central planner)
-    *
     */
     
     // ====================== waiting camera node to command for visual servoing  ====================== //
@@ -252,8 +257,8 @@ public:
     ROS_INFO("// ====================== recieve the read_cam_flag_msg ====================== //");
 
     // ====================== read data from camera  ====================== //
-    readCamData_flag_msg.data = true;
-    readCamData_flag_pub.publish(readCamData_flag_msg);
+    // readCamData_flag_msg.data = true;
+    // readCamData_flag_pub.publish(readCamData_flag_msg);
 
     geometry_msgs::PoseConstPtr brick_pose_msg = ros::topic::waitForMessage<geometry_msgs::Pose>("/avg_pose");
     ROS_INFO("// ====================== recieve the brick_pose_msg ====================== //");
@@ -308,116 +313,8 @@ public:
     return true;
   }
 
-  void magnetStateCallBack(const std_msgs::Bool::ConstPtr& msg)
-  {
-    // keep track of the magnet state => allows arm to read data only when the magnet is on
-    if (msg->data == true){
-      FLAG_MAGNET_ON = true;
-    }
-    else if (msg->data == false){
-      FLAG_MAGNET_ON = false;
-    }
-  }
-
-  void switchStateCallback(const std_msgs::Bool::ConstPtr& msg)
-  {
-    // keep track of the magnet state => allows arm to read data only when the magnet is on
-    if (msg->data == true && FLAG_SWITCH_TOUCHED == false)
-    { // The active motion plan should stop when the switch is triggered
-      FLAG_SWITCH_TOUCHED = true;
-      move_group.stop();
-    }
-    else if (msg->data == false)
-    {
-      FLAG_SWITCH_TOUCHED = false;  // switch is deactivated
-
-    }else
-    {
-      // do nothing
-    }
-    
-  }
-
-  void readCamDataFlagCallback(const std_msgs::Bool::ConstPtr& msg)
-  {
-    if (msg->data == true){
-      FLAG_READ_CAM_DATA = true;
-    }else{
-      FLAG_READ_CAM_DATA = false;
-    }
-  }
-
-
-  void calcAvgCallback(const geometry_msgs::Pose::ConstPtr& msg)
-  {
-    // read the brick pose from the camera
-    // then go and get it
-    if (FLAG_READ_CAM_DATA == true){
-      if (gb_count_pose_msg < NUM_SUM + NUM_DISCARD){
-
-        if (gb_count_pose_msg <= NUM_DISCARD){  // discard the initial steam data => garbage data
-          gb_x_sum = 0;
-          gb_y_sum = 0;
-          gb_z_sum = 0;
-          gb_xq_sum = 0;
-          gb_yq_sum = 0;
-          gb_zq_sum = 0;
-          gb_wq_sum = 0;
-        }
-
-        ROS_INFO("Accumulate the data");
-        gb_x_sum += msg->position.x;
-        gb_y_sum += msg->position.y;
-        gb_z_sum += msg->position.z;
-        gb_xq_sum += msg->orientation.x;
-        gb_yq_sum += msg->orientation.y;
-        gb_zq_sum += msg->orientation.z;
-        gb_wq_sum += msg->orientation.w;
-
-        gb_count_pose_msg += 1;
-
-      }else{ // picking up should start from DEFAULT position
-        int n = NUM_SUM;
-
-        avg_pose_msg.position.x = gb_x_sum/n;
-        avg_pose_msg.position.y = gb_y_sum/n;
-        avg_pose_msg.position.z = gb_z_sum/n;
-        avg_pose_msg.orientation.x = gb_xq_sum/n;
-        avg_pose_msg.orientation.y = gb_yq_sum/n;
-        avg_pose_msg.orientation.z = gb_zq_sum/n;
-        avg_pose_msg.orientation.w = gb_wq_sum/n;
-        ROS_INFO("x = %lf, y = %lf, z = %lf", avg_pose_msg.position.x, avg_pose_msg.position.y, avg_pose_msg.position.z);
-
-        avg_pose_pub.publish(avg_pose_msg);
-
-        FLAG_READ_CAM_DATA = false;
-
-        gb_x_sum = 0;
-        gb_y_sum = 0;
-        gb_z_sum = 0;
-        gb_xq_sum = 0;
-        gb_yq_sum = 0;
-        gb_zq_sum = 0;
-        gb_wq_sum = 0;
-
-        gb_count_pose_msg = 0; // reset the counter of data to be averaged
-
-
-      }
-    }else{
-      // DON'T get the stream data from camera and clear garbage data
-      gb_x_sum = 0;
-      gb_y_sum = 0;
-      gb_z_sum = 0;
-      gb_xq_sum = 0;
-      gb_yq_sum = 0;
-      gb_zq_sum = 0;
-      gb_wq_sum = 0;
-
-    }
-  }
-
-  bool goToBrickServiceCallback(mbzirc_challenge2::go_to_brick::Request  &req,
+  // ==================== Internal Service Callback Function ==================== //
+  bool _goToBrickServiceCallback(mbzirc_challenge2::go_to_brick::Request  &req,
                         mbzirc_challenge2::go_to_brick::Response  &res)
   {
     /*  This function moves UR5 arm to get the brick
@@ -463,7 +360,7 @@ public:
     move_group.setGoalJointTolerance(0.01);
 
     bool success{move_group.plan(my_plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS};
-    ROS_INFO_NAMED("tutorial", "Visualizing Initial joint plan (joint space goal) %s", success ? "" : "FAILED");
+    ROS_INFO_NAMED("tutorial", "Align Yaw angle %s", success ? "" : "FAILED");
 
     if(!success)  // Don't proceed if cannot reach the position
     {
@@ -526,7 +423,7 @@ public:
       res.success = false;
       return true;
     }
-    ROS_INFO_NAMED("tutorial", "Step 2: Move close to the brick (%.2f%% achieved)", fraction * 100.0);
+    ROS_INFO_NAMED("tutorial", "_goToBrickServiceCallback: Step 2: Move close to the brick (%.2f%% achieved)", fraction * 100.0);
 
     cartesian_plan.trajectory_ = trajectory_down;
 
@@ -547,6 +444,7 @@ public:
     //  ====================== Slowly moving the end-effector down, till it triggered  ====================== //
     while (true)
     {
+      ROS_INFO("_goToBrickServiceCallback: Moving Down Slowly");
       moveXYZSlowly(0, 0, -0.1, 0.01, 0.01); // continue to move down until the tactile sensor is triggered
 
       if (FLAG_SWITCH_TOUCHED == true) // tactile sensor is triggered => stop
@@ -554,7 +452,6 @@ public:
         break;
       }
     }
-    attachBrick(req.brick_color_code);
 
     
     FLAG_READ_CAM_DATA = false; // Disable reading box pose data stream
@@ -563,20 +460,31 @@ public:
     //  ====================== Open magnet to make it stronger  ====================== //
     magnet_state_msg.data = true;
     magnet_state_pub.publish(magnet_state_msg); // MAGNET ON
-    ROS_INFO("MAGNET_ON");
+    ROS_INFO("_goToBrickServiceCallback: MAGNET_ON");
+    attachBrick(req.brick_color_code);
     ros::Duration(2).sleep();
 
     //  ====================== Move the robot arm back to the default position  ====================== //
     moveToDefault();
     moveToDefault_finished_flag_msg.data = true;
     moveToDefault_finished_flag_pub.publish(moveToDefault_finished_flag_msg); // let the planner know that the arm is at default position 
-    res.success = true;
-    res.workspace_reachable = true;
+
+    if (FLAG_SWITCH_TOUCHED)  
+    {
+      res.success = true;
+      res.workspace_reachable = true;
+    }else // The brick dropped
+    {
+      res.success = false;
+      res.workspace_reachable = false;
+    }
+
     return true;
   }
 
-  bool placeInContainerServiceCallback(mbzirc_challenge2::place_in_container::Request  &req,
-                                     mbzirc_challenge2::place_in_container::Response  &res)
+
+  bool _placeInContainerServiceCallback(mbzirc_challenge2::place_in_container::Request  &req,
+                                        mbzirc_challenge2::place_in_container::Response  &res)
   {
     /*  This function place brick in one of the container
     *   1) Turn the robot to the target side of the container
@@ -604,7 +512,7 @@ public:
     move_group.setGoalJointTolerance(0.01);
 
     bool success{move_group.plan(my_plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS};
-    ROS_INFO_NAMED("tutorial", "moveToStorageSide Step 2: Turn left %s", success ? "SUCCEEDED" : "FAILED");
+    ROS_INFO_NAMED("tutorial", "moveToStorageSide Step 2: Turn %s", success ? "SUCCEEDED" : "FAILED");
 
 
     #ifdef DEBUG
@@ -670,7 +578,7 @@ public:
     //  ====================== turn off the magnet to detach the brick  ====================== //
     magnet_state_msg.data = false;
     magnet_state_pub.publish(magnet_state_msg); // MAGNET OFF
-    ROS_INFO("MAGNET_OFF");
+    ROS_INFO("_placeInContainerServiceCallback: MAGNET_OFF");
     ros::Duration(2).sleep();
     detachBrick();
 
@@ -682,10 +590,95 @@ public:
     //  ====================== turn the magnet on again  ====================== //
     magnet_state_msg.data = true;
     magnet_state_pub.publish(magnet_state_msg); // MAGNET OFF
-    ROS_INFO("MAGNET_ON");
+    ROS_INFO("_placeInContainerServiceCallback: MAGNET_ON");
     deleteObject();
 
   }
+
+  // ==================== Topic Callback Function ==================== //
+  void calcAvgCallback(const geometry_msgs::Pose::ConstPtr& msg)
+  {
+    /*  Read the brick pose from the camera
+    *   publish the processed data
+    */
+    if (FLAG_READ_CAM_DATA == true){
+      if (gb_count_pose_msg < NUM_SUM + NUM_DISCARD){
+
+        if (gb_count_pose_msg <= NUM_DISCARD){  // discard the initial steam data => garbage data
+          gb_x_sum = 0;
+          gb_y_sum = 0;
+          gb_z_sum = 0;
+          gb_xq_sum = 0;
+          gb_yq_sum = 0;
+          gb_zq_sum = 0;
+          gb_wq_sum = 0;
+        }
+
+        ROS_INFO("calcAvgCallback: Accumulate the data");
+        gb_x_sum += msg->position.x;
+        gb_y_sum += msg->position.y;
+        gb_z_sum += msg->position.z;
+        gb_xq_sum += msg->orientation.x;
+        gb_yq_sum += msg->orientation.y;
+        gb_zq_sum += msg->orientation.z;
+        gb_wq_sum += msg->orientation.w;
+
+        gb_count_pose_msg += 1;
+
+      }else{ // picking up should start from DEFAULT position
+        int n = NUM_SUM;
+
+        avg_pose_msg.position.x = gb_x_sum/n;
+        avg_pose_msg.position.y = gb_y_sum/n;
+        avg_pose_msg.position.z = gb_z_sum/n;
+        avg_pose_msg.orientation.x = gb_xq_sum/n;
+        avg_pose_msg.orientation.y = gb_yq_sum/n;
+        avg_pose_msg.orientation.z = gb_zq_sum/n;
+        avg_pose_msg.orientation.w = gb_wq_sum/n;
+        ROS_INFO("calcAvgCallback: x = %lf, y = %lf, z = %lf", avg_pose_msg.position.x, avg_pose_msg.position.y, avg_pose_msg.position.z);
+
+        avg_pose_pub.publish(avg_pose_msg);
+
+        FLAG_READ_CAM_DATA = false;
+
+        gb_x_sum = 0;
+        gb_y_sum = 0;
+        gb_z_sum = 0;
+        gb_xq_sum = 0;
+        gb_yq_sum = 0;
+        gb_zq_sum = 0;
+        gb_wq_sum = 0;
+
+        gb_count_pose_msg = 0; // reset the counter of data to be averaged
+
+
+      }
+    }else{
+      // DON'T get the stream data from camera and clear garbage data
+      gb_x_sum = 0;
+      gb_y_sum = 0;
+      gb_z_sum = 0;
+      gb_xq_sum = 0;
+      gb_yq_sum = 0;
+      gb_zq_sum = 0;
+      gb_wq_sum = 0;
+
+    }
+  }
+
+
+  // void magnetStateCallBack(const std_msgs::Bool::ConstPtr& msg)
+  // {
+  //   /*  Turn magnet on and off
+  //   */
+  //   if (msg->data == true){
+  //     FLAG_MAGNET_ON = true;
+  //   }
+  //   else if (msg->data == false){
+  //     FLAG_MAGNET_ON = false;
+  //   }
+  // }
+
 
   void moveToDafaultFlagCallback(const std_msgs::Bool::ConstPtr& msg)
   {
@@ -701,12 +694,26 @@ public:
     }
   }
 
-  void servoStopCallback(const std_msgs::Bool::ConstPtr& msg)
+
+  void plateXYOffsetCallback(const geometry_msgs::Point::ConstPtr& msg)
   {
-    if (msg->data == true)
+    /*  Align camera with the center of the brick's plate (XY plane) 
+    */
+    ROS_INFO("plateXYOffsetCallback: move XY"); // Pixel distance
+    moveXYZSlowly(msg->x, msg->y, 0, 0.02, 0.02);
+    finish_stop_xy_msg.data = true;
+    finish_stop_xy_pub.publish(finish_stop_xy_msg);
+  }
+
+
+  void plateYawMoveCallback(const std_msgs::Bool::ConstPtr& msg)
+  {
+    /*  Align camera with the brick's plate (Yaw Angle)
+    */
+    if(msg->data == true)
     {
-      ROS_INFO("servoStopCallback: stop motion");
-      move_group.stop();
+      ROS_INFO("plateYawMoveCallback: rotate end_effector to correct the yaw angle");
+      moveYawSlowly(LEFT, 0.02, 0.02);
     }
     else
     {
@@ -714,16 +721,13 @@ public:
     }
   }
 
-  void plateXYOffsetCallback(const geometry_msgs::Point::ConstPtr& msg)
-  {
-    ROS_INFO("plateXYOffsetCallback: move XY"); // Pixel distance
-    moveXYZSlowly(msg->x, msg->y, 0, 0.02, 0.02);
-    finish_stop_xy_msg.data = true;
-    finish_stop_xy_pub.publish(finish_stop_xy_msg);
-  }
 
   void plateYawIncorrectCallback(const std_msgs::Bool::ConstPtr& msg)
   {
+    /*  The bounding box of the plate is similar when yaw angle is at -rad and rad
+    *   We initially turn Left in plateYawMoveCallback, if it's wrong direction
+    *   We turn the otherside (rely on topic msg from camera node)
+    */
     if(msg->data == true)
     {
       ROS_INFO("plateYawIncorrectCallback: wrong direction of yaw");
@@ -739,12 +743,29 @@ public:
     }
   }
 
-  void plateYawMoveCallback(const std_msgs::Bool::ConstPtr& msg)
+
+  void readCamDataFlagCallback(const std_msgs::Bool::ConstPtr& msg)
   {
-    if(msg->data == true)
+    /*  This allows UR5 to take the data stream from camera
+    *   data stream is geometry_msgs::Pose of the brick
+    */
+    if (msg->data == true){
+      FLAG_READ_CAM_DATA = true;
+    }else{
+      FLAG_READ_CAM_DATA = false;
+    }
+  }
+
+
+  void servoStopCallback(const std_msgs::Bool::ConstPtr& msg)
+  {
+    /*  Subscribe to /stop topic msg from camera node
+    *   To stop the arm movement in visual servo control
+    */
+    if (msg->data == true)
     {
-      ROS_INFO("plateYawMoveCallback: rotate end_effector to correct the yaw angle");
-      moveYawSlowly(LEFT, 0.02, 0.02);
+      ROS_INFO("servoStopCallback: stop motion");
+      move_group.stop();
     }
     else
     {
@@ -752,40 +773,100 @@ public:
     }
   }
 
-  void moveToDefault()
+
+  void switchStateCallback(const std_msgs::Bool::ConstPtr& msg)
   {
-    current_state = move_group.getCurrentState();
-    ros::Duration(0.5).sleep();
-    current_state = move_group.getCurrentState();
-    // Next get the current set of joint values for the group.
-    std::vector<double> joint_group_positions;
-    current_state->copyJointGroupPositions(joint_model_group, joint_group_positions);
+    /*  The Switch will always publish false if it's not touched, 
+    *   true if it's touched => the robot arm's motion should stop
+    */
 
-    joint_group_positions[0] = PI/2;  // Radian
-    joint_group_positions[1] = -PI/2;
-    joint_group_positions[2] = PI/4;
-    joint_group_positions[3] = 2 * PI - PI/4;
-    joint_group_positions[4] = -PI/2;
-    joint_group_positions[5] = 0;
-    move_group.setJointValueTarget(joint_group_positions);
-    move_group.setMaxVelocityScalingFactor(0.3);
-    move_group.setMaxAccelerationScalingFactor(0.3);
-    move_group.setPlanningTime(PLANNING_TIMEOUT);
-    move_group.setGoalJointTolerance(0.01);
+    if (msg->data == true && FLAG_SWITCH_TOUCHED == false)
+    { // The active motion plan should stop when the switch is triggered
+      FLAG_SWITCH_TOUCHED = true;
+      move_group.stop();
+    }
+    else if (msg->data == false)
+    {
+      FLAG_SWITCH_TOUCHED = false;  // switch is deactivated
 
-
-    bool success{move_group.plan(my_plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS};
-    ROS_INFO_NAMED("tutorial", "Visualizing Initial joint plan (joint space goal) %s", success ? "SUCCEEDED" : "FAILED");
-
-    #ifdef DEBUG
-      visual_tools.prompt("Press 'next' to front position");
-    #endif
-
-    move_group.move();                      // BLOCKING FUNCTION
+    }else
+    {
+      // do nothing
+    }
+    
   }
+
+  // ==================== Class Function ==================== //
+  void attachBrick(int color)
+  {
+    
+    brick.header.frame_id = move_group.getEndEffectorLink(); // reference to end-effector frame
+    brick.id = "brick"; // The id of the object is used to identify it.
+
+    shape_msgs::SolidPrimitive primitive_brick; // Define UGV_body dimension (in meter)
+    primitive_brick.type = primitive_brick.BOX;
+    primitive_brick.dimensions.resize(3);
+    primitive_brick.dimensions[0] = 0.20;  // length (x)
+    primitive_brick.dimensions[2] = 0.20;  // width  (y)
+
+    switch (color)
+    {
+    case RED:
+      primitive_brick.dimensions[1] = 0.30;  // Box length in meter
+      break;
+    case GREEN:
+      primitive_brick.dimensions[1] = 0.60;  
+      break;
+    case BLUE:
+      primitive_brick.dimensions[1] = 1.20;  
+      break;
+    default:
+      primitive_brick.dimensions[1] = 1.80;  
+      break;
+    }
+    
+
+    geometry_msgs::Pose pose_brick; // Define a pose for the UGV_body (specified relative to frame_id)
+    // q.setRPY(0, 0, 0);
+    // Rotate 45 degree about x-axis from https://quaternions.online/
+    pose_brick.orientation.x = 0.0;
+    pose_brick.orientation.y = 0.0;
+    pose_brick.orientation.z = 0.0;
+    pose_brick.orientation.w = 1.0;
+    pose_brick.position.x = primitive_brick.dimensions[0]/2 + DIST_EE_TO_MAGNET;
+    pose_brick.position.y = 0;
+    pose_brick.position.z = 0;
+
+    brick.primitives.push_back(primitive_brick);
+    brick.primitive_poses.push_back(pose_brick);
+    brick.operation = brick.ADD;
+
+    std::vector<moveit_msgs::CollisionObject> collision_robot_body2;
+    collision_robot_body2.push_back(brick);
+    planning_scene_interface.addCollisionObjects(collision_robot_body2); //add the collision object into the world
+    move_group.attachObject(brick.id); // attach the magnet panel to end-effector
+  }
+
+
+  void detachBrick()
+  {
+    move_group.detachObject(brick.id);
+  }
+
+
+  void deleteObject()
+  {
+    std::vector<std::string> object_ids;
+    object_ids.push_back(brick.id);
+    planning_scene_interface.removeCollisionObjects(object_ids);
+  }
+
 
   void moveFromCurrentState(float toX, float toY, float toZ)
   {
+    /*  Move the arm to the default position
+    *   Upfront arm with end_effector looking down
+    */
     // input: x, y, z distance w.r.t to camera axis
     // moving +toX => +X in robot frame
     // moving +toY => -Y in robot frame
@@ -820,7 +901,7 @@ public:
       if (fraction == 1.0)
         break;
     }
-    ROS_INFO_NAMED("tutorial", "Visualizing CartesianPath down (%.2f%% achieved)", fraction * 100.0);
+    ROS_INFO_NAMED("tutorial", "moveFromCurrentState: CartesianPath (%.2f%% achieved)", fraction * 100.0);
     cartesian_plan.trajectory_ = trajectory_down;
 
 
@@ -830,9 +911,44 @@ public:
     #endif
 
     move_group.execute(cartesian_plan);
-
-
   }
+
+
+  void moveToDefault()
+  {
+    /*  Move the arm to the default position
+    *   Upfront arm with end_effector looking down
+    */
+    current_state = move_group.getCurrentState();
+    ros::Duration(0.5).sleep();
+    current_state = move_group.getCurrentState();
+    // Next get the current set of joint values for the group.
+    std::vector<double> joint_group_positions;
+    current_state->copyJointGroupPositions(joint_model_group, joint_group_positions);
+
+    joint_group_positions[0] = PI/2;  // Radian
+    joint_group_positions[1] = -PI/2;
+    joint_group_positions[2] = PI/4;
+    joint_group_positions[3] = 2 * PI - PI/4;
+    joint_group_positions[4] = -PI/2;
+    joint_group_positions[5] = 0;
+    move_group.setJointValueTarget(joint_group_positions);
+    move_group.setMaxVelocityScalingFactor(0.3);
+    move_group.setMaxAccelerationScalingFactor(0.3);
+    move_group.setPlanningTime(PLANNING_TIMEOUT);
+    move_group.setGoalJointTolerance(0.01);
+
+
+    bool success{move_group.plan(my_plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS};
+    ROS_INFO_NAMED("tutorial", "moveToDefault: %s", success ? "SUCCEEDED" : "FAILED");
+
+    #ifdef DEBUG
+      visual_tools.prompt("Press 'next' to front position");
+    #endif
+
+    move_group.move();                      // BLOCKING FUNCTION
+  }
+
 
   void moveXYZSlowly(float X, float Y, float Z, float max_v_scaling, float max_a_scaling)
   {
@@ -879,7 +995,7 @@ public:
     bool success = iptp.computeTimeStamps(rt, max_v_scaling, max_a_scaling);
     rt.getRobotTrajectoryMsg(trajectory_down);
 
-    ROS_INFO_NAMED("tutorial", "Visualizing CartesianPath down (%.2f%% achieved)", fraction * 100.0);
+    ROS_INFO_NAMED("tutorial", "moveXYZSlowly (%.2f%% achieved)", fraction * 100.0);
     cartesian_plan.trajectory_ = trajectory_down;
 
     #ifdef DEBUG
@@ -888,6 +1004,7 @@ public:
 
     move_group.execute(cartesian_plan);
   }
+
 
   void moveYawSlowly(bool direction, float max_v_scaling, float max_a_scaling)
   {
@@ -913,7 +1030,7 @@ public:
     move_group.setGoalJointTolerance(0.01);
 
     bool success{move_group.plan(my_plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS};
-    ROS_INFO_NAMED("tutorial", "Visualizing Initial joint plan (joint space goal) %s", success ? "SUCCEEDED" : "FAILED");
+    ROS_INFO_NAMED("tutorial", "moveYawSlowly %s", success ? "SUCCEEDED" : "FAILED");
 
     #ifdef DEBUG
       visual_tools.prompt("Press 'next' to front position");
@@ -921,6 +1038,7 @@ public:
 
     move_group.move();                      // BLOCKING FUNCTION
   }
+
 
   void resetYaw()
   {
@@ -942,7 +1060,7 @@ public:
     move_group.setGoalJointTolerance(0.01);
 
     bool success{move_group.plan(my_plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS};
-    ROS_INFO_NAMED("tutorial", "Visualizing Initial joint plan (joint space goal) %s", success ? "SUCCEEDED" : "FAILED");
+    ROS_INFO_NAMED("tutorial", "resetYaw: moving back to default yaw %s", success ? "SUCCEEDED" : "FAILED");
 
     #ifdef DEBUG
       visual_tools.prompt("Press 'next' to front position");
@@ -951,8 +1069,336 @@ public:
     move_group.move();                      // BLOCKING FUNCTION
   }
 
+  // ==================== Initialization =====================//
+  void initWall()
+  {
+    visual_tools.deleteAllMarkers();
+    visual_tools.loadRemoteControl();
+    text_pose.translation().z() = 1.75;
+    visual_tools.publishText(text_pose, "MoveGroupInterface Demo", rvt::WHITE, rvt::XLARGE);
+    visual_tools.trigger();
 
-  // FOR DEBUGGING REMOVE IF NOT NEEDED
+    // ============================== Set Robot Body Collision ============================== //
+
+    // ---------- UGV_base
+    moveit_msgs::CollisionObject UGV_base; // Define a collision object ROS message.
+    UGV_base.header.frame_id = move_group.getPlanningFrame();
+
+    UGV_base.id = "UGV_base"; // The id of the object is used to identify it.
+
+    shape_msgs::SolidPrimitive primitive_UGV_base; // Define UGV_base dimension (in meter)
+    primitive_UGV_base.type = primitive_UGV_base.BOX;
+    primitive_UGV_base.dimensions.resize(3);
+    primitive_UGV_base.dimensions[0] = 0.80;  // x right
+    primitive_UGV_base.dimensions[1] = 1.12;  // y front
+    primitive_UGV_base.dimensions[2] = 0.59;  // z up
+
+    geometry_msgs::Pose pose_UGV_base; // Define a pose for the Robot_bottom (specified relative to frame_id)
+    q.setRPY(0, 0, 0);
+    pose_UGV_base.orientation.x = q[0];
+    pose_UGV_base.orientation.y = q[1];
+    pose_UGV_base.orientation.z = q[2];
+    pose_UGV_base.orientation.w = q[3];
+    pose_UGV_base.position.y = -primitive_UGV_base.dimensions[1]/2 + 0.05/2 + 0.04;
+    pose_UGV_base.position.z = -primitive_UGV_base.dimensions[2]/2;
+
+    UGV_base.primitives.push_back(primitive_UGV_base);
+    UGV_base.primitive_poses.push_back(pose_UGV_base);
+    UGV_base.operation = UGV_base.ADD;
+
+    // ---------- UGV_base2
+    moveit_msgs::CollisionObject UGV_base2; // Define a collision object ROS message.
+    UGV_base2.header.frame_id = move_group.getPlanningFrame();
+
+    UGV_base2.id = "UGV_base2"; // The id of the object is used to identify it.
+
+    shape_msgs::SolidPrimitive primitive_UGV_base2; // Define UGV_base dimension (in meter)
+    primitive_UGV_base2.type = primitive_UGV_base2.BOX;
+    primitive_UGV_base2.dimensions.resize(3);
+    primitive_UGV_base2.dimensions[0] = primitive_UGV_base.dimensions[0];  // x right
+    primitive_UGV_base2.dimensions[1] = 0.12;  // y front
+    primitive_UGV_base2.dimensions[2] = 0.04;  // z up
+
+    geometry_msgs::Pose pose_UGV_base2; // Define a pose for the Robot_bottom (specified relative to frame_id)
+    q.setRPY(0, 0, 0);
+    pose_UGV_base2.orientation.x = q[0];
+    pose_UGV_base2.orientation.y = q[1];
+    pose_UGV_base2.orientation.z = q[2];
+    pose_UGV_base2.orientation.w = q[3];
+    pose_UGV_base2.position.y = primitive_UGV_base2.dimensions[1]/2 + 0.05/2;
+    pose_UGV_base2.position.z = primitive_UGV_base2.dimensions[2]/2 - 0.29;
+
+    UGV_base2.primitives.push_back(primitive_UGV_base2);
+    UGV_base2.primitive_poses.push_back(pose_UGV_base2);
+    UGV_base2.operation = UGV_base2.ADD;
+
+    // ---------- Magnet Panel at end effector
+    moveit_msgs::CollisionObject magnet_panel;
+    magnet_panel.header.frame_id = move_group.getEndEffectorLink(); // reference to end-effector frame
+    magnet_panel.id = "magnet_panel"; // The id of the object is used to identify it.
+
+    shape_msgs::SolidPrimitive primitive_magnet_panel; // Define UGV_body dimension (in meter)
+    primitive_magnet_panel.type = primitive_magnet_panel.BOX;
+    primitive_magnet_panel.dimensions.resize(3);
+    primitive_magnet_panel.dimensions[0] = DIST_EE_TO_MAGNET;  // length (x)
+    primitive_magnet_panel.dimensions[1] = 0.115;  // width  (y)
+    primitive_magnet_panel.dimensions[2] = 0.075;  // height (z)
+
+    // magnetic panel
+    geometry_msgs::Pose pose_magnet_panel; // Define a pose for the UGV_body (specified relative to frame_id)
+    // q.setRPY(45, 0, 0);
+    // q.normalize();
+    // Rotate 45 degree about x-axis from https://quaternions.online/
+    pose_magnet_panel.orientation.x = 0.0;
+    pose_magnet_panel.orientation.y = 0.0;
+    pose_magnet_panel.orientation.z = 0.0;
+    pose_magnet_panel.orientation.w = 1.0;
+
+    //note the axis of EE
+    pose_magnet_panel.position.x = primitive_magnet_panel.dimensions[0]/2;
+    pose_magnet_panel.position.y = 0.02475;
+    pose_magnet_panel.position.z = 0;
+
+    magnet_panel.primitives.push_back(primitive_magnet_panel);
+    magnet_panel.primitive_poses.push_back(pose_magnet_panel);
+    magnet_panel.operation = magnet_panel.ADD;
+
+    // ---------- Container_left_out
+    moveit_msgs::CollisionObject Container_left_out; // Define a collision object ROS message.
+    Container_left_out.header.frame_id = move_group.getPlanningFrame();
+
+    Container_left_out.id = "Container_left_out"; // The id of the object is used to identify it.
+
+    shape_msgs::SolidPrimitive primitive_Container_left_out; // Define UGV_base dimension (in meter)
+    primitive_Container_left_out.type = primitive_Container_left_out.BOX;
+    primitive_Container_left_out.dimensions.resize(3);
+    primitive_Container_left_out.dimensions[0] = 0.03;  // x right
+    primitive_Container_left_out.dimensions[1] = 1.20;  // y front
+    primitive_Container_left_out.dimensions[2] = 1.0;  // z up
+
+    geometry_msgs::Pose pose_Container_left_out; // Define a pose for the Robot_bottom (specified relative to frame_id)
+    q.setRPY(0, 0, 0);
+    pose_Container_left_out.orientation.x = q[0];
+    pose_Container_left_out.orientation.y = q[1];
+    pose_Container_left_out.orientation.z = q[2];
+    pose_Container_left_out.orientation.w = q[3];
+    pose_Container_left_out.position.x = -primitive_Container_left_out.dimensions[0]/2 - primitive_UGV_base.dimensions[0] / 2 - 0.33;
+    pose_Container_left_out.position.y = -primitive_Container_left_out.dimensions[1]/2 + 0.05/2 + 0.08 + 0.04;
+    pose_Container_left_out.position.z = primitive_Container_left_out.dimensions[2]/2 - 0.30 - 0.30;
+
+    Container_left_out.primitives.push_back(primitive_Container_left_out);
+    Container_left_out.primitive_poses.push_back(pose_Container_left_out);
+    Container_left_out.operation = Container_left_out.ADD;
+
+    // ---------- Container_left_in
+    moveit_msgs::CollisionObject Container_left_in; // Define a collision object ROS message.
+    Container_left_in.header.frame_id = move_group.getPlanningFrame();
+
+    Container_left_in.id = "Container_left_in"; // The id of the object is used to identify it.
+
+    shape_msgs::SolidPrimitive primitive_Container_left_in; // Define UGV_base dimension (in meter)
+    primitive_Container_left_in.type = primitive_Container_left_in.BOX;
+    primitive_Container_left_in.dimensions.resize(3);
+    primitive_Container_left_in.dimensions[0] = 0.03;  // x right
+    primitive_Container_left_in.dimensions[1] = 0.95;  // y front
+    primitive_Container_left_in.dimensions[2] = 0.8;  // z up
+
+    geometry_msgs::Pose pose_Container_left_in; // Define a pose for the Robot_bottom (specified relative to frame_id)
+    q.setRPY(0, 0, 0);
+    pose_Container_left_in.orientation.x = q[0];
+    pose_Container_left_in.orientation.y = q[1];
+    pose_Container_left_in.orientation.z = q[2];
+    pose_Container_left_in.orientation.w = q[3];
+    pose_Container_left_in.position.x = -primitive_Container_left_in.dimensions[0]/2 - 0.4;
+    pose_Container_left_in.position.y = -0.58 - 0.15;
+    pose_Container_left_in.position.z = primitive_Container_left_in.dimensions[2]/2 - 0.30 - 0.30;
+
+    Container_left_in.primitives.push_back(primitive_Container_left_in);
+    Container_left_in.primitive_poses.push_back(pose_Container_left_in);
+    Container_left_in.operation = Container_left_in.ADD;
+
+    // ---------- Container_left_low_in
+    moveit_msgs::CollisionObject Container_left_low_in; // Define a collision object ROS message.
+    Container_left_low_in.header.frame_id = move_group.getPlanningFrame();
+
+    Container_left_low_in.id = "Container_left_low_in"; // The id of the object is used to identify it.
+
+    shape_msgs::SolidPrimitive primitive_Container_left_low_in; // Define UGV_base dimension (in meter)
+    primitive_Container_left_low_in.type = primitive_Container_left_low_in.BOX;
+    primitive_Container_left_low_in.dimensions.resize(3);
+    primitive_Container_left_low_in.dimensions[0] = 0.03;  // x right
+    primitive_Container_left_low_in.dimensions[1] = primitive_UGV_base.dimensions[1];  // y front
+    primitive_Container_left_low_in.dimensions[2] = primitive_UGV_base.dimensions[2];  // z up
+
+    geometry_msgs::Pose pose_Container_left_low_in; // Define a pose for the Robot_bottom (specified relative to frame_id)
+    q.setRPY(0, 0, 0);
+    pose_Container_left_low_in.orientation.x = q[0];
+    pose_Container_left_low_in.orientation.y = q[1];
+    pose_Container_left_low_in.orientation.z = q[2];
+    pose_Container_left_low_in.orientation.w = q[3];
+    pose_Container_left_low_in.position.x = -primitive_Container_left_low_in.dimensions[0]/2 - 0.4;
+    pose_Container_left_low_in.position.y = pose_UGV_base.position.y;
+    pose_Container_left_low_in.position.z = pose_UGV_base.position.z;
+
+    Container_left_low_in.primitives.push_back(primitive_Container_left_low_in);
+    Container_left_low_in.primitive_poses.push_back(pose_Container_left_low_in);
+    Container_left_low_in.operation = Container_left_low_in.ADD;
+
+    // ---------- Container_right_out
+    moveit_msgs::CollisionObject Container_right_out; // Define a collision object ROS message.
+    Container_right_out.header.frame_id = move_group.getPlanningFrame();
+
+    Container_right_out.id = "Container_right_out"; // The id of the object is used to identify it.
+
+    shape_msgs::SolidPrimitive primitive_Container_right_out; // Define UGV_base dimension (in meter)
+    primitive_Container_right_out.type = primitive_Container_left_out.BOX;
+    primitive_Container_right_out.dimensions.resize(3);
+    primitive_Container_right_out.dimensions[0] = 0.03;  // x right
+    primitive_Container_right_out.dimensions[1] = 1.20;  // y front
+    primitive_Container_right_out.dimensions[2] = 1.0;  // z up
+
+    geometry_msgs::Pose pose_Container_right_out; // Define a pose for the Robot_bottom (specified relative to frame_id)
+    q.setRPY(0, 0, 0);
+    pose_Container_right_out.orientation.x = q[0];
+    pose_Container_right_out.orientation.y = q[1];
+    pose_Container_right_out.orientation.z = q[2];
+    pose_Container_right_out.orientation.w = q[3];
+    pose_Container_right_out.position.x = primitive_Container_right_out.dimensions[0]/2 + primitive_UGV_base.dimensions[0] / 2 + 0.33;
+    pose_Container_right_out.position.y = -primitive_Container_right_out.dimensions[1]/2 + 0.05/2 + 0.08 + 0.04;
+    pose_Container_right_out.position.z = primitive_Container_right_out.dimensions[2]/2 - 0.30 - 0.30;
+
+    Container_right_out.primitives.push_back(primitive_Container_right_out);
+    Container_right_out.primitive_poses.push_back(pose_Container_right_out);
+    Container_right_out.operation = Container_right_out.ADD;
+
+    // ---------- Container_right_in
+    moveit_msgs::CollisionObject Container_right_in; // Define a collision object ROS message.
+    Container_right_in.header.frame_id = move_group.getPlanningFrame();
+
+    Container_right_in.id = "Container_right_in"; // The id of the object is used to identify it.
+
+    shape_msgs::SolidPrimitive primitive_Container_right_in; // Define UGV_base dimension (in meter)
+    primitive_Container_right_in.type = primitive_Container_left_in.BOX;
+    primitive_Container_right_in.dimensions.resize(3);
+    primitive_Container_right_in.dimensions[0] = 0.03;  // x right
+    primitive_Container_right_in.dimensions[1] = 0.95;  // y front
+    primitive_Container_right_in.dimensions[2] = 0.8;  // z up
+
+    geometry_msgs::Pose pose_Container_right_in; // Define a pose for the Robot_bottom (specified relative to frame_id)
+    q.setRPY(0, 0, 0);
+    pose_Container_right_in.orientation.x = q[0];
+    pose_Container_right_in.orientation.y = q[1];
+    pose_Container_right_in.orientation.z = q[2];
+    pose_Container_right_in.orientation.w = q[3];
+    pose_Container_right_in.position.x = primitive_Container_right_in.dimensions[0]/2 + 0.4;
+    pose_Container_right_in.position.y = -0.58 - 0.15;
+    pose_Container_right_in.position.z = primitive_Container_right_in.dimensions[2]/2 - 0.30 - 0.30;
+
+    Container_right_in.primitives.push_back(primitive_Container_right_in);
+    Container_right_in.primitive_poses.push_back(pose_Container_right_in);
+    Container_right_in.operation = Container_right_in.ADD;
+
+    // ---------- Container_left_low_in
+    moveit_msgs::CollisionObject Container_right_low_in; // Define a collision object ROS message.
+    Container_right_low_in.header.frame_id = move_group.getPlanningFrame();
+
+    Container_right_low_in.id = "Container_right_low_in"; // The id of the object is used to identify it.
+
+    shape_msgs::SolidPrimitive primitive_Container_right_low_in; // Define UGV_base dimension (in meter)
+    primitive_Container_right_low_in.type = primitive_Container_right_low_in.BOX;
+    primitive_Container_right_low_in.dimensions.resize(3);
+    primitive_Container_right_low_in.dimensions[0] = 0.03;  // x right
+    primitive_Container_right_low_in.dimensions[1] = primitive_UGV_base.dimensions[1];  // y front
+    primitive_Container_right_low_in.dimensions[2] = primitive_UGV_base.dimensions[2];  // z up
+
+    geometry_msgs::Pose pose_Container_right_low_in; // Define a pose for the Robot_bottom (specified relative to frame_id)
+    q.setRPY(0, 0, 0);
+    pose_Container_right_low_in.orientation.x = q[0];
+    pose_Container_right_low_in.orientation.y = q[1];
+    pose_Container_right_low_in.orientation.z = q[2];
+    pose_Container_right_low_in.orientation.w = q[3];
+    pose_Container_right_low_in.position.x = pose_Container_right_in.position.x;
+    pose_Container_right_low_in.position.y = pose_UGV_base.position.y;
+    pose_Container_right_low_in.position.z = pose_UGV_base.position.z;
+
+    Container_right_low_in.primitives.push_back(primitive_Container_right_low_in);
+    Container_right_low_in.primitive_poses.push_back(pose_Container_right_low_in);
+    Container_right_low_in.operation = Container_right_low_in.ADD;
+
+    // ---------- ground
+    moveit_msgs::CollisionObject ground; // Define a collision object ROS message.
+    ground.header.frame_id = move_group.getPlanningFrame(); // reference to end-effector frame
+    ground.id = "ground"; // The id of the object is used to identify it.
+
+    shape_msgs::SolidPrimitive primitive_ground; // Define UGV_body dimension (in meter)
+    primitive_ground.type = primitive_ground.BOX;
+    primitive_ground.dimensions.resize(3);
+    primitive_ground.dimensions[0] = 3;  // length (x)
+    primitive_ground.dimensions[1] = 3;  // width  (y)
+    primitive_ground.dimensions[2] = 0.001;  // height (z)
+
+    geometry_msgs::Pose pose_ground; // Define a pose for the UGV_body (specified relative to frame_id)
+    q.setRPY(0, 0, 0);
+    pose_ground.orientation.x = q[0];
+    pose_ground.orientation.y = q[1];
+    pose_ground.orientation.z = q[2];
+    pose_ground.orientation.w = q[3];
+    pose_ground.position.x = 0;
+    pose_ground.position.y = 0;
+    pose_ground.position.z = - primitive_ground.dimensions[2]/2 - (primitive_UGV_base.dimensions[2]);
+
+    ground.primitives.push_back(primitive_ground);
+    ground.primitive_poses.push_back(pose_ground);
+    ground.operation = ground.ADD;
+
+    // ---------- ground_container
+    moveit_msgs::CollisionObject ground_container; // Define a collision object ROS message.
+    ground_container.header.frame_id = move_group.getPlanningFrame(); // reference to end-effector frame
+    ground_container.id = "ground_container"; // The id of the object is used to identify it.
+
+    shape_msgs::SolidPrimitive primitive_ground_container; // Define UGV_body dimension (in meter)
+    primitive_ground_container.type = primitive_ground_container.BOX;
+    primitive_ground_container.dimensions.resize(3);
+    primitive_ground_container.dimensions[0] = 3;  // length (x)
+    primitive_ground_container.dimensions[1] = primitive_UGV_base.dimensions[1];  // width  (y)
+    primitive_ground_container.dimensions[2] = 0.001;  // height (z)
+
+    geometry_msgs::Pose pose_ground_container; // Define a pose for the UGV_body (specified relative to frame_id)
+    q.setRPY(0, 0, 0);
+    pose_ground_container.orientation.x = q[0];
+    pose_ground_container.orientation.y = q[1];
+    pose_ground_container.orientation.z = q[2];
+    pose_ground_container.orientation.w = q[3];
+    pose_ground_container.position.x = 0;
+    pose_ground_container.position.y = -primitive_UGV_base.dimensions[1]/2 + 0.05/2 + 0.04;
+    pose_ground_container.position.z = - primitive_ground_container.dimensions[2]/2 - (primitive_UGV_base.dimensions[2] - 0.20);
+
+    ground_container.primitives.push_back(primitive_ground_container);
+    ground_container.primitive_poses.push_back(pose_ground_container);
+    ground_container.operation = ground_container.ADD;
+
+    // ---------- Collect Whole Robot Body
+
+    std::vector<moveit_msgs::CollisionObject> collision_robot_body;
+    collision_robot_body.push_back(UGV_base);
+    collision_robot_body.push_back(UGV_base2);
+    collision_robot_body.push_back(magnet_panel);
+    collision_robot_body.push_back(Container_left_out);
+    collision_robot_body.push_back(Container_left_in);
+    collision_robot_body.push_back(Container_left_low_in);
+    // collision_robot_body.push_back(Container_right_out);
+    collision_robot_body.push_back(Container_right_in);
+    collision_robot_body.push_back(Container_right_low_in);
+    collision_robot_body.push_back(ground);
+    collision_robot_body.push_back(ground_container);
+    planning_scene_interface.addCollisionObjects(collision_robot_body); //add the collision object into the world
+    ros::Duration(DELAY).sleep(); // wait to build the object before attaching to ee
+    move_group.attachObject(magnet_panel.id); // attach the magnet panel to end-effector
+
+
+  }
+
+  // ==================== FOR DEBUGGING REMOVE IF NOT NEEDED ==================== //
   void manual_moveXYZ(const geometry_msgs::Pose::ConstPtr& msg)
   {
     target_pose = move_group.getCurrentPose().pose;
@@ -987,7 +1433,7 @@ public:
       if (fraction == 1.0)
         break;
     }
-    ROS_INFO_NAMED("tutorial", "Visualizing CartesianPath down (%.2f%% achieved)", fraction * 100.0);
+    ROS_INFO_NAMED("tutorial", "manual_moveXYZ CartesianPath (%.2f%% achieved)", fraction * 100.0);
     cartesian_plan.trajectory_ = trajectory_down;
 
     #ifdef DEBUG
@@ -997,6 +1443,7 @@ public:
     move_group.execute(cartesian_plan);
     // ros::Duration(DELAY).sleep();           // wait for robot to update current state otherwise failed
   }
+
 
   void moveToStorageSideFlagCallback(const std_msgs::Bool::ConstPtr& msg)
   {
@@ -1014,6 +1461,7 @@ public:
       // DO NOTHING
     }
   }
+
 
   void moveToStorageSide_DEBUG(uint box_count)
   {
@@ -1090,396 +1538,6 @@ public:
 
   }
 
-  void initWall()
-  {
-
-      visual_tools.deleteAllMarkers();
-      visual_tools.loadRemoteControl();
-      text_pose.translation().z() = 1.75;
-      visual_tools.publishText(text_pose, "MoveGroupInterface Demo", rvt::WHITE, rvt::XLARGE);
-      visual_tools.trigger();
-
-      // ============================== Set Robot Body Collision ============================== //
-
-      // ---------- UGV_base
-      moveit_msgs::CollisionObject UGV_base; // Define a collision object ROS message.
-      UGV_base.header.frame_id = move_group.getPlanningFrame();
-
-      UGV_base.id = "UGV_base"; // The id of the object is used to identify it.
-
-      shape_msgs::SolidPrimitive primitive_UGV_base; // Define UGV_base dimension (in meter)
-      primitive_UGV_base.type = primitive_UGV_base.BOX;
-      primitive_UGV_base.dimensions.resize(3);
-      primitive_UGV_base.dimensions[0] = 0.80;  // x right
-      primitive_UGV_base.dimensions[1] = 1.12;  // y front
-      primitive_UGV_base.dimensions[2] = 0.59;  // z up
-
-      geometry_msgs::Pose pose_UGV_base; // Define a pose for the Robot_bottom (specified relative to frame_id)
-      q.setRPY(0, 0, 0);
-      pose_UGV_base.orientation.x = q[0];
-      pose_UGV_base.orientation.y = q[1];
-      pose_UGV_base.orientation.z = q[2];
-      pose_UGV_base.orientation.w = q[3];
-      pose_UGV_base.position.y = -primitive_UGV_base.dimensions[1]/2 + 0.05/2 + 0.04;
-      pose_UGV_base.position.z = -primitive_UGV_base.dimensions[2]/2;
-
-      UGV_base.primitives.push_back(primitive_UGV_base);
-      UGV_base.primitive_poses.push_back(pose_UGV_base);
-      UGV_base.operation = UGV_base.ADD;
-
-      // ---------- UGV_base2
-      moveit_msgs::CollisionObject UGV_base2; // Define a collision object ROS message.
-      UGV_base2.header.frame_id = move_group.getPlanningFrame();
-
-      UGV_base2.id = "UGV_base2"; // The id of the object is used to identify it.
-
-      shape_msgs::SolidPrimitive primitive_UGV_base2; // Define UGV_base dimension (in meter)
-      primitive_UGV_base2.type = primitive_UGV_base2.BOX;
-      primitive_UGV_base2.dimensions.resize(3);
-      primitive_UGV_base2.dimensions[0] = primitive_UGV_base.dimensions[0];  // x right
-      primitive_UGV_base2.dimensions[1] = 0.12;  // y front
-      primitive_UGV_base2.dimensions[2] = 0.04;  // z up
-
-      geometry_msgs::Pose pose_UGV_base2; // Define a pose for the Robot_bottom (specified relative to frame_id)
-      q.setRPY(0, 0, 0);
-      pose_UGV_base2.orientation.x = q[0];
-      pose_UGV_base2.orientation.y = q[1];
-      pose_UGV_base2.orientation.z = q[2];
-      pose_UGV_base2.orientation.w = q[3];
-      pose_UGV_base2.position.y = primitive_UGV_base2.dimensions[1]/2 + 0.05/2;
-      pose_UGV_base2.position.z = primitive_UGV_base2.dimensions[2]/2 - 0.29;
-
-      UGV_base2.primitives.push_back(primitive_UGV_base2);
-      UGV_base2.primitive_poses.push_back(pose_UGV_base2);
-      UGV_base2.operation = UGV_base2.ADD;
-
-      // ---------- Magnet Panel at end effector
-      moveit_msgs::CollisionObject magnet_panel;
-      magnet_panel.header.frame_id = move_group.getEndEffectorLink(); // reference to end-effector frame
-      magnet_panel.id = "magnet_panel"; // The id of the object is used to identify it.
-
-      shape_msgs::SolidPrimitive primitive_magnet_panel; // Define UGV_body dimension (in meter)
-      primitive_magnet_panel.type = primitive_magnet_panel.BOX;
-      primitive_magnet_panel.dimensions.resize(3);
-      primitive_magnet_panel.dimensions[0] = DIST_EE_TO_MAGNET;  // length (x)
-      primitive_magnet_panel.dimensions[1] = 0.115;  // width  (y)
-      primitive_magnet_panel.dimensions[2] = 0.075;  // height (z)
-
-      // magnetic panel
-      geometry_msgs::Pose pose_magnet_panel; // Define a pose for the UGV_body (specified relative to frame_id)
-      // q.setRPY(45, 0, 0);
-      // q.normalize();
-      // Rotate 45 degree about x-axis from https://quaternions.online/
-      pose_magnet_panel.orientation.x = 0.0;
-      pose_magnet_panel.orientation.y = 0.0;
-      pose_magnet_panel.orientation.z = 0.0;
-      pose_magnet_panel.orientation.w = 1.0;
-
-      //note the axis of EE
-      pose_magnet_panel.position.x = primitive_magnet_panel.dimensions[0]/2;
-      pose_magnet_panel.position.y = 0.02475;
-      pose_magnet_panel.position.z = 0;
-
-      magnet_panel.primitives.push_back(primitive_magnet_panel);
-      magnet_panel.primitive_poses.push_back(pose_magnet_panel);
-      magnet_panel.operation = magnet_panel.ADD;
-
-      // ---------- Container_left_out
-      moveit_msgs::CollisionObject Container_left_out; // Define a collision object ROS message.
-      Container_left_out.header.frame_id = move_group.getPlanningFrame();
-
-      Container_left_out.id = "Container_left_out"; // The id of the object is used to identify it.
-
-      shape_msgs::SolidPrimitive primitive_Container_left_out; // Define UGV_base dimension (in meter)
-      primitive_Container_left_out.type = primitive_Container_left_out.BOX;
-      primitive_Container_left_out.dimensions.resize(3);
-      primitive_Container_left_out.dimensions[0] = 0.03;  // x right
-      primitive_Container_left_out.dimensions[1] = 1.20;  // y front
-      primitive_Container_left_out.dimensions[2] = 1.0;  // z up
-
-      geometry_msgs::Pose pose_Container_left_out; // Define a pose for the Robot_bottom (specified relative to frame_id)
-      q.setRPY(0, 0, 0);
-      pose_Container_left_out.orientation.x = q[0];
-      pose_Container_left_out.orientation.y = q[1];
-      pose_Container_left_out.orientation.z = q[2];
-      pose_Container_left_out.orientation.w = q[3];
-      pose_Container_left_out.position.x = -primitive_Container_left_out.dimensions[0]/2 - primitive_UGV_base.dimensions[0] / 2 - 0.33;
-      pose_Container_left_out.position.y = -primitive_Container_left_out.dimensions[1]/2 + 0.05/2 + 0.08 + 0.04;
-      pose_Container_left_out.position.z = primitive_Container_left_out.dimensions[2]/2 - 0.30 - 0.30;
-
-      Container_left_out.primitives.push_back(primitive_Container_left_out);
-      Container_left_out.primitive_poses.push_back(pose_Container_left_out);
-      Container_left_out.operation = Container_left_out.ADD;
-
-      // ---------- Container_left_in
-      moveit_msgs::CollisionObject Container_left_in; // Define a collision object ROS message.
-      Container_left_in.header.frame_id = move_group.getPlanningFrame();
-
-      Container_left_in.id = "Container_left_in"; // The id of the object is used to identify it.
-
-      shape_msgs::SolidPrimitive primitive_Container_left_in; // Define UGV_base dimension (in meter)
-      primitive_Container_left_in.type = primitive_Container_left_in.BOX;
-      primitive_Container_left_in.dimensions.resize(3);
-      primitive_Container_left_in.dimensions[0] = 0.03;  // x right
-      primitive_Container_left_in.dimensions[1] = 0.95;  // y front
-      primitive_Container_left_in.dimensions[2] = 0.8;  // z up
-
-      geometry_msgs::Pose pose_Container_left_in; // Define a pose for the Robot_bottom (specified relative to frame_id)
-      q.setRPY(0, 0, 0);
-      pose_Container_left_in.orientation.x = q[0];
-      pose_Container_left_in.orientation.y = q[1];
-      pose_Container_left_in.orientation.z = q[2];
-      pose_Container_left_in.orientation.w = q[3];
-      pose_Container_left_in.position.x = -primitive_Container_left_in.dimensions[0]/2 - 0.4;
-      pose_Container_left_in.position.y = -0.58 - 0.15;
-      pose_Container_left_in.position.z = primitive_Container_left_in.dimensions[2]/2 - 0.30 - 0.30;
-
-      Container_left_in.primitives.push_back(primitive_Container_left_in);
-      Container_left_in.primitive_poses.push_back(pose_Container_left_in);
-      Container_left_in.operation = Container_left_in.ADD;
-
-      // ---------- Container_left_low_in
-      moveit_msgs::CollisionObject Container_left_low_in; // Define a collision object ROS message.
-      Container_left_low_in.header.frame_id = move_group.getPlanningFrame();
-
-      Container_left_low_in.id = "Container_left_low_in"; // The id of the object is used to identify it.
-
-      shape_msgs::SolidPrimitive primitive_Container_left_low_in; // Define UGV_base dimension (in meter)
-      primitive_Container_left_low_in.type = primitive_Container_left_low_in.BOX;
-      primitive_Container_left_low_in.dimensions.resize(3);
-      primitive_Container_left_low_in.dimensions[0] = 0.03;  // x right
-      primitive_Container_left_low_in.dimensions[1] = primitive_UGV_base.dimensions[1];  // y front
-      primitive_Container_left_low_in.dimensions[2] = primitive_UGV_base.dimensions[2];  // z up
-
-      geometry_msgs::Pose pose_Container_left_low_in; // Define a pose for the Robot_bottom (specified relative to frame_id)
-      q.setRPY(0, 0, 0);
-      pose_Container_left_low_in.orientation.x = q[0];
-      pose_Container_left_low_in.orientation.y = q[1];
-      pose_Container_left_low_in.orientation.z = q[2];
-      pose_Container_left_low_in.orientation.w = q[3];
-      pose_Container_left_low_in.position.x = -primitive_Container_left_low_in.dimensions[0]/2 - 0.4;
-      pose_Container_left_low_in.position.y = pose_UGV_base.position.y;
-      pose_Container_left_low_in.position.z = pose_UGV_base.position.z;
-
-      Container_left_low_in.primitives.push_back(primitive_Container_left_low_in);
-      Container_left_low_in.primitive_poses.push_back(pose_Container_left_low_in);
-      Container_left_low_in.operation = Container_left_low_in.ADD;
-
-      // ---------- Container_right_out
-      moveit_msgs::CollisionObject Container_right_out; // Define a collision object ROS message.
-      Container_right_out.header.frame_id = move_group.getPlanningFrame();
-
-      Container_right_out.id = "Container_right_out"; // The id of the object is used to identify it.
-
-      shape_msgs::SolidPrimitive primitive_Container_right_out; // Define UGV_base dimension (in meter)
-      primitive_Container_right_out.type = primitive_Container_left_out.BOX;
-      primitive_Container_right_out.dimensions.resize(3);
-      primitive_Container_right_out.dimensions[0] = 0.03;  // x right
-      primitive_Container_right_out.dimensions[1] = 1.20;  // y front
-      primitive_Container_right_out.dimensions[2] = 1.0;  // z up
-
-      geometry_msgs::Pose pose_Container_right_out; // Define a pose for the Robot_bottom (specified relative to frame_id)
-      q.setRPY(0, 0, 0);
-      pose_Container_right_out.orientation.x = q[0];
-      pose_Container_right_out.orientation.y = q[1];
-      pose_Container_right_out.orientation.z = q[2];
-      pose_Container_right_out.orientation.w = q[3];
-      pose_Container_right_out.position.x = primitive_Container_right_out.dimensions[0]/2 + primitive_UGV_base.dimensions[0] / 2 + 0.33;
-      pose_Container_right_out.position.y = -primitive_Container_right_out.dimensions[1]/2 + 0.05/2 + 0.08 + 0.04;
-      pose_Container_right_out.position.z = primitive_Container_right_out.dimensions[2]/2 - 0.30 - 0.30;
-
-      Container_right_out.primitives.push_back(primitive_Container_right_out);
-      Container_right_out.primitive_poses.push_back(pose_Container_right_out);
-      Container_right_out.operation = Container_right_out.ADD;
-
-      // ---------- Container_right_in
-      moveit_msgs::CollisionObject Container_right_in; // Define a collision object ROS message.
-      Container_right_in.header.frame_id = move_group.getPlanningFrame();
-
-      Container_right_in.id = "Container_right_in"; // The id of the object is used to identify it.
-
-      shape_msgs::SolidPrimitive primitive_Container_right_in; // Define UGV_base dimension (in meter)
-      primitive_Container_right_in.type = primitive_Container_left_in.BOX;
-      primitive_Container_right_in.dimensions.resize(3);
-      primitive_Container_right_in.dimensions[0] = 0.03;  // x right
-      primitive_Container_right_in.dimensions[1] = 0.95;  // y front
-      primitive_Container_right_in.dimensions[2] = 0.8;  // z up
-
-      geometry_msgs::Pose pose_Container_right_in; // Define a pose for the Robot_bottom (specified relative to frame_id)
-      q.setRPY(0, 0, 0);
-      pose_Container_right_in.orientation.x = q[0];
-      pose_Container_right_in.orientation.y = q[1];
-      pose_Container_right_in.orientation.z = q[2];
-      pose_Container_right_in.orientation.w = q[3];
-      pose_Container_right_in.position.x = primitive_Container_right_in.dimensions[0]/2 + 0.4;
-      pose_Container_right_in.position.y = -0.58 - 0.15;
-      pose_Container_right_in.position.z = primitive_Container_right_in.dimensions[2]/2 - 0.30 - 0.30;
-
-      Container_right_in.primitives.push_back(primitive_Container_right_in);
-      Container_right_in.primitive_poses.push_back(pose_Container_right_in);
-      Container_right_in.operation = Container_right_in.ADD;
-
-      // ---------- Container_left_low_in
-      moveit_msgs::CollisionObject Container_right_low_in; // Define a collision object ROS message.
-      Container_right_low_in.header.frame_id = move_group.getPlanningFrame();
-
-      Container_right_low_in.id = "Container_right_low_in"; // The id of the object is used to identify it.
-
-      shape_msgs::SolidPrimitive primitive_Container_right_low_in; // Define UGV_base dimension (in meter)
-      primitive_Container_right_low_in.type = primitive_Container_right_low_in.BOX;
-      primitive_Container_right_low_in.dimensions.resize(3);
-      primitive_Container_right_low_in.dimensions[0] = 0.03;  // x right
-      primitive_Container_right_low_in.dimensions[1] = primitive_UGV_base.dimensions[1];  // y front
-      primitive_Container_right_low_in.dimensions[2] = primitive_UGV_base.dimensions[2];  // z up
-
-      geometry_msgs::Pose pose_Container_right_low_in; // Define a pose for the Robot_bottom (specified relative to frame_id)
-      q.setRPY(0, 0, 0);
-      pose_Container_right_low_in.orientation.x = q[0];
-      pose_Container_right_low_in.orientation.y = q[1];
-      pose_Container_right_low_in.orientation.z = q[2];
-      pose_Container_right_low_in.orientation.w = q[3];
-      pose_Container_right_low_in.position.x = pose_Container_right_in.position.x;
-      pose_Container_right_low_in.position.y = pose_UGV_base.position.y;
-      pose_Container_right_low_in.position.z = pose_UGV_base.position.z;
-
-      Container_right_low_in.primitives.push_back(primitive_Container_right_low_in);
-      Container_right_low_in.primitive_poses.push_back(pose_Container_right_low_in);
-      Container_right_low_in.operation = Container_right_low_in.ADD;
-
-      // ---------- ground
-      moveit_msgs::CollisionObject ground; // Define a collision object ROS message.
-      ground.header.frame_id = move_group.getPlanningFrame(); // reference to end-effector frame
-      ground.id = "ground"; // The id of the object is used to identify it.
-
-      shape_msgs::SolidPrimitive primitive_ground; // Define UGV_body dimension (in meter)
-      primitive_ground.type = primitive_ground.BOX;
-      primitive_ground.dimensions.resize(3);
-      primitive_ground.dimensions[0] = 3;  // length (x)
-      primitive_ground.dimensions[1] = 3;  // width  (y)
-      primitive_ground.dimensions[2] = 0.001;  // height (z)
-
-      geometry_msgs::Pose pose_ground; // Define a pose for the UGV_body (specified relative to frame_id)
-      q.setRPY(0, 0, 0);
-      pose_ground.orientation.x = q[0];
-      pose_ground.orientation.y = q[1];
-      pose_ground.orientation.z = q[2];
-      pose_ground.orientation.w = q[3];
-      pose_ground.position.x = 0;
-      pose_ground.position.y = 0;
-      pose_ground.position.z = - primitive_ground.dimensions[2]/2 - (primitive_UGV_base.dimensions[2]);
-
-      ground.primitives.push_back(primitive_ground);
-      ground.primitive_poses.push_back(pose_ground);
-      ground.operation = ground.ADD;
-
-      // ---------- ground_container
-      moveit_msgs::CollisionObject ground_container; // Define a collision object ROS message.
-      ground_container.header.frame_id = move_group.getPlanningFrame(); // reference to end-effector frame
-      ground_container.id = "ground_container"; // The id of the object is used to identify it.
-
-      shape_msgs::SolidPrimitive primitive_ground_container; // Define UGV_body dimension (in meter)
-      primitive_ground_container.type = primitive_ground_container.BOX;
-      primitive_ground_container.dimensions.resize(3);
-      primitive_ground_container.dimensions[0] = 3;  // length (x)
-      primitive_ground_container.dimensions[1] = primitive_UGV_base.dimensions[1];  // width  (y)
-      primitive_ground_container.dimensions[2] = 0.001;  // height (z)
-
-      geometry_msgs::Pose pose_ground_container; // Define a pose for the UGV_body (specified relative to frame_id)
-      q.setRPY(0, 0, 0);
-      pose_ground_container.orientation.x = q[0];
-      pose_ground_container.orientation.y = q[1];
-      pose_ground_container.orientation.z = q[2];
-      pose_ground_container.orientation.w = q[3];
-      pose_ground_container.position.x = 0;
-      pose_ground_container.position.y = -primitive_UGV_base.dimensions[1]/2 + 0.05/2 + 0.04;
-      pose_ground_container.position.z = - primitive_ground_container.dimensions[2]/2 - (primitive_UGV_base.dimensions[2] - 0.20);
-
-      ground_container.primitives.push_back(primitive_ground_container);
-      ground_container.primitive_poses.push_back(pose_ground_container);
-      ground_container.operation = ground_container.ADD;
-
-      // ---------- Collect Whole Robot Body
-
-      std::vector<moveit_msgs::CollisionObject> collision_robot_body;
-      collision_robot_body.push_back(UGV_base);
-      collision_robot_body.push_back(UGV_base2);
-      collision_robot_body.push_back(magnet_panel);
-      collision_robot_body.push_back(Container_left_out);
-      collision_robot_body.push_back(Container_left_in);
-      collision_robot_body.push_back(Container_left_low_in);
-      // collision_robot_body.push_back(Container_right_out);
-      collision_robot_body.push_back(Container_right_in);
-      collision_robot_body.push_back(Container_right_low_in);
-      collision_robot_body.push_back(ground);
-      collision_robot_body.push_back(ground_container);
-      planning_scene_interface.addCollisionObjects(collision_robot_body); //add the collision object into the world
-      ros::Duration(DELAY).sleep(); // wait to build the object before attaching to ee
-      move_group.attachObject(magnet_panel.id); // attach the magnet panel to end-effector
-
-
-  }
-
-  void attachBrick(int color)
-  {
-    
-    brick.header.frame_id = move_group.getEndEffectorLink(); // reference to end-effector frame
-    brick.id = "brick"; // The id of the object is used to identify it.
-
-    shape_msgs::SolidPrimitive primitive_brick; // Define UGV_body dimension (in meter)
-    primitive_brick.type = primitive_brick.BOX;
-    primitive_brick.dimensions.resize(3);
-    primitive_brick.dimensions[0] = 0.20;  // length (x)
-    primitive_brick.dimensions[2] = 0.20;  // width  (y)
-
-    switch (color)
-    {
-    case RED:
-      primitive_brick.dimensions[1] = 0.30;  // Box length in meter
-      break;
-    case GREEN:
-      primitive_brick.dimensions[1] = 0.60;  
-      break;
-    case BLUE:
-      primitive_brick.dimensions[1] = 1.20;  
-      break;
-    default:
-      primitive_brick.dimensions[1] = 1.80;  
-      break;
-    }
-    
-
-    geometry_msgs::Pose pose_brick; // Define a pose for the UGV_body (specified relative to frame_id)
-    // q.setRPY(0, 0, 0);
-    // Rotate 45 degree about x-axis from https://quaternions.online/
-    pose_brick.orientation.x = 0.0;
-    pose_brick.orientation.y = 0.0;
-    pose_brick.orientation.z = 0.0;
-    pose_brick.orientation.w = 1.0;
-    pose_brick.position.x = primitive_brick.dimensions[0]/2 + DIST_EE_TO_MAGNET;
-    pose_brick.position.y = 0;
-    pose_brick.position.z = 0;
-
-    brick.primitives.push_back(primitive_brick);
-    brick.primitive_poses.push_back(pose_brick);
-    brick.operation = brick.ADD;
-
-    std::vector<moveit_msgs::CollisionObject> collision_robot_body2;
-    collision_robot_body2.push_back(brick);
-    planning_scene_interface.addCollisionObjects(collision_robot_body2); //add the collision object into the world
-    move_group.attachObject(brick.id); // attach the magnet panel to end-effector
-  }
-
-  void detachBrick()
-  {
-    move_group.detachObject(brick.id);
-  }
-
-  void deleteObject()
-  {
-    std::vector<std::string> object_ids;
-    object_ids.push_back(brick.id);
-    planning_scene_interface.removeCollisionObjects(object_ids);
-  }
 
 };  // end of class definition
 
