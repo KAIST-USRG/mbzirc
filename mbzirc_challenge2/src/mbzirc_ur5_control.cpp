@@ -107,6 +107,8 @@ private:
   ros::Publisher box_count_pub;
   ros::Publisher magnet_state_pub;
   ros::Publisher readCamData_flag_pub;
+  ros::Publisher finish_stop_xy_pub;
+  ros::Publisher finish_stop_yaw_pub;
 
   // Subscriber
   ros::Subscriber pose_from_cam_sub;
@@ -118,6 +120,12 @@ private:
   ros::Subscriber magnet_state_sub;
   ros::Subscriber sensor_range_sub;
   ros::Subscriber switch_state_sub;
+  ros::Subscriber plate_xy_move_sub;
+  ros::Subscriber plate_xy_offset_sub;
+  ros::Subscriber plate_yaw_incorrect_sub;
+  ros::Subscriber plate_yaw_move_sub;
+  ros::Subscriber servo_stop_sub;
+
 
   // msg
   std_msgs::Bool moveToStorageSide_flag_msg;
@@ -127,6 +135,8 @@ private:
   std_msgs::Bool magnet_state_msg;
   std_msgs::Bool moveToStorageSide_finished_flag_msg;
   std_msgs::Bool moveToDefault_finished_flag_msg;
+  std_msgs::Bool finish_stop_xy_msg;
+  std_msgs::Bool finish_stop_yaw_msg;
 
   // ServiceClient
   ros::ServiceClient go_to_brick_sc;
@@ -154,8 +164,6 @@ private:
   Eigen::Isometry3d text_pose;
 
   geometry_msgs::Pose avg_pose_msg; // absolute position w.r.t UR5 base
-
-
 
 public:
 
@@ -196,6 +204,9 @@ public:
     box_count_pub = nh.advertise<std_msgs::Int16>("/box_count", 10);
     magnet_state_pub = nh.advertise<std_msgs::Bool>("/magnet_on", 10);
     readCamData_flag_pub = nh.advertise<std_msgs::Bool>("/readCamData_Flag", 10);
+    finish_stop_xy_pub = nh.advertise<std_msgs::Bool>("/finish_stop_xy", 10);
+    finish_stop_yaw_pub = nh.advertise<std_msgs::Bool>("/finish_stop_yaw", 10);
+
 
     pose_from_cam_sub = nh.subscribe("/brick_pose", 10, &Arm::calcAvgCallback, this);
     
@@ -204,6 +215,10 @@ public:
     readCamData_flag_sub = nh.subscribe("/readCamData_Flag", 100, &Arm::readCamDataFlagCallback, this);
     manual_moveXVZ_sub = nh.subscribe("/manual_moveXVZ", 10, &Arm::manual_moveXYZ, this);
     switch_state_sub = nh.subscribe("/switch_state", 1, &Arm::switchStateCallback, this);
+    servo_stop_sub = nh.subscribe("/stop", 1, &Arm::servoStopCallback, this);
+    plate_xy_offset_sub = nh.subscribe("/plate_xy_offset", 1, &Arm::plateXYOffsetCallback, this);
+    plate_yaw_incorrect_sub = nh.subscribe("/plate_yaw_incorrect", 1, &Arm::plateYawIncorrectCallback, this);
+    plate_yaw_move_sub = nh.subscribe("/plate_yaw_move", 1, &Arm::plateYawMoveCallback, this);
 
     // DEBUG
     moveToStorageSide_flag_sub = nh.subscribe("/moveToStorageSide_flag", 10, &Arm::moveToStorageSideFlagCallback, this);
@@ -226,8 +241,14 @@ public:
   }
 
   bool urMoveCallback(mission_manager::ur_move::Request  &req,
-            mission_manager::ur_move::Response  &res)
+                       mission_manager::ur_move::Response  &res)
   {    
+    // ====================== visual servo to align camera with bricks ====================== //
+    // align XY
+    ROS_INFO("// ====================== urMoveCallback ====================== //");
+
+    // align yaw angle
+
     // ====================== read data from camera  ====================== //
     readCamData_flag_msg.data = true;
     readCamData_flag_pub.publish(readCamData_flag_msg);
@@ -524,7 +545,7 @@ public:
     //  ====================== Slowly moving the end-effector down, till it triggered  ====================== //
     while (true)
     {
-      moveDownSlowly(); // continue to move down until the tactile sensor is triggered
+      moveXYZSlowly(0, 0, -0.1, 0.01, 0.01); // continue to move down until the tactile sensor is triggered
 
       if (FLAG_SWITCH_TOUCHED == true) // tactile sensor is triggered => stop
       {
@@ -678,6 +699,57 @@ public:
     }
   }
 
+  void servoStopCallback(const std_msgs::Bool::ConstPtr& msg)
+  {
+    if (msg->data == true)
+    {
+      ROS_INFO("servoStopCallback: stop motion");
+      move_group.stop();
+    }
+    else
+    {
+      // do nothing
+    }
+  }
+
+  void plateXYOffsetCallback(const geometry_msgs::Point::ConstPtr& msg)
+  {
+    ROS_INFO("plateXYOffsetCallback: move XY"); // Pixel distance
+    moveXYZSlowly(msg->x, msg->y, 0, 0.02, 0.02);
+    finish_stop_xy_msg.data = true;
+    finish_stop_xy_pub.publish(finish_stop_xy_msg);
+  }
+
+  void plateYawIncorrectCallback(const std_msgs::Bool::ConstPtr& msg)
+  {
+    if(msg->data == true)
+    {
+      ROS_INFO("plateYawIncorrectCallback: wrong direction of yaw");
+      move_group.stop();
+      resetYaw();
+      moveYawSlowly(RIGHT, 0.02, 0.02);
+      finish_stop_yaw_msg.data = true;
+      finish_stop_yaw_pub.publish(finish_stop_yaw_msg);
+    }
+    else
+    {
+      // do nothing
+    }
+  }
+
+  void plateYawMoveCallback(const std_msgs::Bool::ConstPtr& msg)
+  {
+    if(msg->data == true)
+    {
+      ROS_INFO("plateYawMoveCallback: rotate end_effector to correct the yaw angle");
+      moveYawSlowly(LEFT, 0.02, 0.02);
+    }
+    else
+    {
+      // do nothing
+    }
+  }
+
   void moveToDefault()
   {
     current_state = move_group.getCurrentState();
@@ -760,8 +832,11 @@ public:
 
   }
 
-  void moveDownSlowly()
+  void moveXYZSlowly(float X, float Y, float Z, float max_v_scaling, float max_a_scaling)
   {
+    /* This function moves the end_effector slowly in Cartesian plane
+    *  The input XYZ is the distance with respect to the camera coordinate
+    */
     geometry_msgs::Pose target_pose = move_group.getCurrentPose().pose;
     std::vector<geometry_msgs::Pose> waypoints_down;
     ros::Duration(0.5).sleep();
@@ -771,7 +846,9 @@ public:
     // +X: right
     // +Y: front
     // +Z: up
-    target_pose.position.z -= 0.1;  // go down by 0.005 millimeter
+    target_pose.position.x += X;
+    target_pose.position.y += Y;
+    target_pose.position.z += Z; 
     waypoints_down.push_back(target_pose);
 
     // Seong) Set planner, Max velo and Planning time
@@ -789,6 +866,7 @@ public:
         break;
     }
 
+    // ================================= modify the velocity of Cartesian path ================================= //
     // First create a RobotTrajectory object
     robot_trajectory::RobotTrajectory rt(move_group.getCurrentState()->getRobotModel(), "manipulator");
     // Second get a RobotTrajectory from trajectory
@@ -796,7 +874,7 @@ public:
     // Thrid create a IterativeParabolicTimeParameterization object
     trajectory_processing::IterativeParabolicTimeParameterization iptp;
     // Fourth compute computeTimeStamps
-    bool success = iptp.computeTimeStamps(rt, 0.01, 0.01);
+    bool success = iptp.computeTimeStamps(rt, max_v_scaling, max_a_scaling);
     rt.getRobotTrajectoryMsg(trajectory_down);
 
     ROS_INFO_NAMED("tutorial", "Visualizing CartesianPath down (%.2f%% achieved)", fraction * 100.0);
@@ -807,6 +885,68 @@ public:
     #endif
 
     move_group.execute(cartesian_plan);
+  }
+
+  void moveYawSlowly(bool direction, float max_v_scaling, float max_a_scaling)
+  {
+    /* This function yaws the end_effector slowly in Cartesian plane
+    *  + rad: left, - rad : right
+    */
+    current_state = move_group.getCurrentState();
+    ros::Duration(0.5).sleep();
+    current_state = move_group.getCurrentState();
+    // Next get the current set of joint values for the group.
+    std::vector<double> joint_group_positions;
+    current_state->copyJointGroupPositions(joint_model_group, joint_group_positions);
+
+    if (direction == LEFT)
+      joint_group_positions[5] -= PI/2;
+    else
+      joint_group_positions[5] += PI/2;
+
+    move_group.setJointValueTarget(joint_group_positions);
+    move_group.setMaxVelocityScalingFactor(max_v_scaling);
+    move_group.setMaxAccelerationScalingFactor(max_a_scaling);
+    move_group.setPlanningTime(PLANNING_TIMEOUT);
+    move_group.setGoalJointTolerance(0.01);
+
+    bool success{move_group.plan(my_plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS};
+    ROS_INFO_NAMED("tutorial", "Visualizing Initial joint plan (joint space goal) %s", success ? "SUCCEEDED" : "FAILED");
+
+    #ifdef DEBUG
+      visual_tools.prompt("Press 'next' to front position");
+    #endif
+
+    move_group.move();                      // BLOCKING FUNCTION
+  }
+
+  void resetYaw()
+  {
+    /* This function reset yaws angle
+    */
+    current_state = move_group.getCurrentState();
+    ros::Duration(0.5).sleep();
+    current_state = move_group.getCurrentState();
+    // Next get the current set of joint values for the group.
+    std::vector<double> joint_group_positions;
+    current_state->copyJointGroupPositions(joint_model_group, joint_group_positions);
+
+    joint_group_positions[5] = 0;
+
+    move_group.setJointValueTarget(joint_group_positions);
+    move_group.setMaxVelocityScalingFactor(1);
+    move_group.setMaxAccelerationScalingFactor(1);
+    move_group.setPlanningTime(PLANNING_TIMEOUT);
+    move_group.setGoalJointTolerance(0.01);
+
+    bool success{move_group.plan(my_plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS};
+    ROS_INFO_NAMED("tutorial", "Visualizing Initial joint plan (joint space goal) %s", success ? "SUCCEEDED" : "FAILED");
+
+    #ifdef DEBUG
+      visual_tools.prompt("Press 'next' to front position");
+    #endif
+
+    move_group.move();                      // BLOCKING FUNCTION
   }
 
 
@@ -1080,7 +1220,7 @@ public:
       primitive_Container_left_in.dimensions.resize(3);
       primitive_Container_left_in.dimensions[0] = 0.03;  // x right
       primitive_Container_left_in.dimensions[1] = 0.95;  // y front
-      primitive_Container_left_in.dimensions[2] = 1.0;  // z up
+      primitive_Container_left_in.dimensions[2] = 0.8;  // z up
 
       geometry_msgs::Pose pose_Container_left_in; // Define a pose for the Robot_bottom (specified relative to frame_id)
       q.setRPY(0, 0, 0);
@@ -1161,7 +1301,7 @@ public:
       primitive_Container_right_in.dimensions.resize(3);
       primitive_Container_right_in.dimensions[0] = 0.03;  // x right
       primitive_Container_right_in.dimensions[1] = 0.95;  // y front
-      primitive_Container_right_in.dimensions[2] = 1.00;  // z up
+      primitive_Container_right_in.dimensions[2] = 0.8;  // z up
 
       geometry_msgs::Pose pose_Container_right_in; // Define a pose for the Robot_bottom (specified relative to frame_id)
       q.setRPY(0, 0, 0);
