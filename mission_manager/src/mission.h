@@ -63,6 +63,11 @@ enum MISSION_SEQUENCE {
     MISSION_FINISH
 };
 
+enum UGV_action {
+    UGV_ACTION_LOAD = 0,
+    UGV_ACTION_UNLOAD
+};
+
 enum UR_action {
     UR_ACTION_LOAD = 0,
     UR_ACTION_UNLOAD
@@ -80,6 +85,11 @@ enum Container_side {
     CONTAINER_RIGHT
 };
 
+enum ARENA_SECTION {
+    BRICKS,
+    SEGMENT
+};
+
 class Mission_preset{
 private:
     // FOR UGV
@@ -92,6 +102,8 @@ private:
     // FOR CONVEYOR
     int m_conveyor_left_id = 5;
     int m_conveyor_right_id = 6;
+    int m_conveyor_center_id = 7;
+
     string m_conveyor_item_cmd = "";
     string m_conveyor_item_addr = "Goal_Velocity"; // position ctrl mode : Goal_Position
     int m_conveyor_left_load_vel = 3000;

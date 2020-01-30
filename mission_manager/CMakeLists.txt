@@ -69,7 +69,7 @@ include_directories(
 
 
 
-add_executable(mission_manager_node src/mission_manager.cpp)
+add_executable(mission_manager_node src/mission_manager_v2.cpp)
 
 target_link_libraries(
 	mission_manager_node

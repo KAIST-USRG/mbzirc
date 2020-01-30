@@ -1,3 +1,16 @@
+/* IMPORTANT
+*  reference frame (top view)
+*
+*  1) Camera frame
+*     - X: East
+*     - Y: South
+*     - Z: Down
+*
+*  2) UGV frame
+*     - X: East
+*     - Y: North
+*     - Z: Up
+*/
 #include <pluginlib/class_loader.h>
 #include <ros/ros.h>
 
@@ -38,9 +51,9 @@
 #define PLANNING_TIMEOUT      2
 #define NUM_SUM               3           // to average the pose message
 #define NUM_DISCARD           10
-#define DIST_EE_TO_MAGNET     0.0750
-#define DIST_CAM_TO_EE        0
-#define DIST_LIDAR_TO_MAGNET  0
+#define DIST_EE_TO_MAGNET     0.077
+#define DIST_CAM_TO_EE        -0.015
+#define DIST_LIDAR_TO_MAGNET  0.04
 #define Z_OFFSET              0.02
 #define BELT_BASE_HEIGHT      0.26
 
@@ -68,17 +81,17 @@ bool FLAG_SWITCH_RESET    = true;
 bool FLAG_MAGNET_ON       = true;      // Is the magnet on?
 
 
-int   gb_count_pose_msg = 0;
-int   gb_discard_noise  = 0;
-int   gb_count_move     = 0;  // 0 for moveXY, 1 for moveZ
-int   gb_count_box      = 0;
-float gb_x_sum          = 0;
-float gb_y_sum          = 0;
-float gb_z_sum          = 0;
-float gb_xq_sum         = 0;
-float gb_yq_sum         = 0;
-float gb_zq_sum         = 0;
-float gb_wq_sum         = 0;
+int   gb_count_pose_msg   = 0;
+int   gb_discard_noise    = 0;
+int   gb_count_move       = 0;  // 0 for moveXY, 1 for moveZ
+int   gb_count_box        = 0;
+float gb_x_sum            = 0;
+float gb_y_sum            = 0;
+float gb_z_sum            = 0;
+float gb_xq_sum           = 0;
+float gb_yq_sum           = 0;
+float gb_zq_sum           = 0;
+float gb_wq_sum           = 0;
 
 
 class Arm{
@@ -294,7 +307,7 @@ public:
       std::cout << "go_to_brick_sc: Failed to call service" << std::endl;
       return false;
     }
-  
+    ROS_INFO("Finish go_to_brick service");
     //  ====================== place the brick in the container  ====================== //
     place_in_container_srv.request.order_of_this_brick = gb_count_box;
     place_in_container_srv.request.brick_container_side = req.target_brick_container_side_left_right;
@@ -383,9 +396,9 @@ public:
     move_group.move(); //move to storage on left side
 
     //  ====================== Move close to the brick  ====================== //
-    // moving +toX => +X in robot frame
-    // moving +toY => -Y in robot frame
-    // moving +toZ => -Z in robot frame
+    // moving +toX => +X in UGV frame
+    // moving +toY => -Y in UGV frame
+    // moving +toZ => -Z in UGV frame
 
     std::vector<geometry_msgs::Pose> waypoints_down;
     target_pose = move_group.getCurrentPose().pose; 
@@ -461,13 +474,38 @@ public:
     magnet_state_msg.data = true;
     magnet_state_pub.publish(magnet_state_msg); // MAGNET ON
     ROS_INFO("_goToBrickServiceCallback: MAGNET_ON");
+    ros::Duration(1.5).sleep();
     attachBrick(req.brick_color_code);
-    ros::Duration(2).sleep();
+    
 
-    //  ====================== Move the robot arm back to the default position  ====================== //
-    moveToDefault();
-    moveToDefault_finished_flag_msg.data = true;
-    moveToDefault_finished_flag_pub.publish(moveToDefault_finished_flag_msg); // let the planner know that the arm is at default position 
+    //  ====================== Move the robot arm back to the higher than default position  ====================== //
+    current_state = move_group.getCurrentState();
+    ros::Duration(0.5).sleep();
+    current_state = move_group.getCurrentState();
+    // Next get the current set of joint values for the group.
+    current_state->copyJointGroupPositions(joint_model_group, joint_group_positions);
+
+    joint_group_positions[0] = PI;  // Radian
+    joint_group_positions[1] = -PI/2;
+    joint_group_positions[2] = PI/180 * 45;
+    joint_group_positions[3] = 2 * PI - PI/180 * 45;
+    joint_group_positions[4] = -PI/2;
+    joint_group_positions[5] = 0;
+    move_group.setJointValueTarget(joint_group_positions);
+    move_group.setMaxVelocityScalingFactor(0.3);
+    move_group.setMaxAccelerationScalingFactor(0.3);
+    move_group.setPlanningTime(PLANNING_TIMEOUT);
+    move_group.setGoalJointTolerance(0.01);
+
+
+    success = (move_group.plan(my_plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS);
+    ROS_INFO_NAMED("tutorial", "Higher moveToDefault: %s", success ? "SUCCEEDED" : "FAILED");
+
+    #ifdef DEBUG
+      visual_tools.prompt("Press 'next' to front position");
+    #endif
+
+    move_group.move();                      // BLOCKING FUNCTION
 
     if (FLAG_SWITCH_TOUCHED)  
     {
@@ -503,9 +541,9 @@ public:
     current_state->copyJointGroupPositions(joint_model_group, joint_group_positions);
 
     if (req.brick_container_side == LEFT)
-      joint_group_positions[0] = PI/2 + PI/2;  // Turn left
+      joint_group_positions[0] = PI + PI/2;  // Turn left
     else
-      joint_group_positions[0] = 0;            // Turn right
+      joint_group_positions[0] = PI - PI/2;            // Turn right
 
     move_group.setJointValueTarget(joint_group_positions);
     move_group.setPlanningTime(PLANNING_TIMEOUT);
@@ -600,6 +638,7 @@ public:
   {
     /*  Read the brick pose from the camera
     *   publish the processed data
+    *   The data is expressed in Camera Frame
     */
     if (FLAG_READ_CAM_DATA == true){
       if (gb_count_pose_msg < NUM_SUM + NUM_DISCARD){
@@ -844,6 +883,7 @@ public:
     std::vector<moveit_msgs::CollisionObject> collision_robot_body2;
     collision_robot_body2.push_back(brick);
     planning_scene_interface.addCollisionObjects(collision_robot_body2); //add the collision object into the world
+    ros::Duration(0.5).sleep();
     move_group.attachObject(brick.id); // attach the magnet panel to end-effector
   }
 
@@ -864,28 +904,26 @@ public:
 
   void moveFromCurrentState(float toX, float toY, float toZ)
   {
-    /*  Move the arm to the default position
-    *   Upfront arm with end_effector looking down
+    /*  Move the end_effector of UR5 to the target point seen from 
+    *   Camera.
+    *   INPUT: x, y, z distance w.r.t to camera axis
     */
-    // input: x, y, z distance w.r.t to camera axis
-    // moving +toX => +X in robot frame
-    // moving +toY => -Y in robot frame
-    // moving +toZ => -Z in robot frame
+
     std::vector<geometry_msgs::Pose> waypoints_down;
     target_pose = move_group.getCurrentPose().pose; // Cartesian Path from the current position
     ros::Duration(0.5).sleep();
     target_pose = move_group.getCurrentPose().pose; // Cartesian Path from the current position
 
-    // move according to the robot frame
-    // +X: right
-    // +Y: front
-    // +Z: up
-    target_pose.position.x = target_pose.position.x + toX;
+    // move UR5 to the target point seen in Camera frame
+    // moving +toX => +Y in robot frame
+    // moving +toY => +X in robot frame
+    // moving +toZ => -Z in robot frame
+    target_pose.position.x = target_pose.position.x + toY;
 
     // Measure DIST_CAM_TO_EE, see CONSTANT part => read bricks' position from camera, but we want to move EE to the brick
-    target_pose.position.y = target_pose.position.y - toY;
+    target_pose.position.y = target_pose.position.y + toX;
     // Measure DIST_CAM_TO_EE, see CONSTANT part
-    target_pose.position.z = target_pose.position.z - toZ;
+    target_pose.position.z = target_pose.position.z + toZ;
     waypoints_down.push_back(target_pose);
 
 
@@ -926,10 +964,10 @@ public:
     std::vector<double> joint_group_positions;
     current_state->copyJointGroupPositions(joint_model_group, joint_group_positions);
 
-    joint_group_positions[0] = PI/2;  // Radian
+    joint_group_positions[0] = PI;  // Radian
     joint_group_positions[1] = -PI/2;
-    joint_group_positions[2] = PI/4;
-    joint_group_positions[3] = 2 * PI - PI/4;
+    joint_group_positions[2] = PI/180*60;
+    joint_group_positions[3] = 2 * PI - PI/180 * 60;
     joint_group_positions[4] = -PI/2;
     joint_group_positions[5] = 0;
     move_group.setJointValueTarget(joint_group_positions);
@@ -953,7 +991,7 @@ public:
   void moveXYZSlowly(float X, float Y, float Z, float max_v_scaling, float max_a_scaling)
   {
     /* This function moves the end_effector slowly in Cartesian plane
-    *  The input XYZ is the distance with respect to the camera coordinate
+    *  The input XYZ is the distance with respect to UGV frame
     */
     geometry_msgs::Pose target_pose = move_group.getCurrentPose().pose;
     std::vector<geometry_msgs::Pose> waypoints_down;
@@ -961,8 +999,8 @@ public:
     target_pose = move_group.getCurrentPose().pose; // Cartesian Path from the current position
 
     // move according to the robot frame
-    // +X: right
-    // +Y: front
+    // +X: back
+    // +Y: right
     // +Z: up
     target_pose.position.x += X;
     target_pose.position.y += Y;
@@ -1140,9 +1178,9 @@ public:
     shape_msgs::SolidPrimitive primitive_magnet_panel; // Define UGV_body dimension (in meter)
     primitive_magnet_panel.type = primitive_magnet_panel.BOX;
     primitive_magnet_panel.dimensions.resize(3);
-    primitive_magnet_panel.dimensions[0] = DIST_EE_TO_MAGNET;  // length (x)
-    primitive_magnet_panel.dimensions[1] = 0.115;  // width  (y)
-    primitive_magnet_panel.dimensions[2] = 0.075;  // height (z)
+    primitive_magnet_panel.dimensions[0] = DIST_EE_TO_MAGNET;  // height
+    primitive_magnet_panel.dimensions[1] = 0.21;  // length
+    primitive_magnet_panel.dimensions[2] = 0.075;  // width
 
     // magnetic panel
     geometry_msgs::Pose pose_magnet_panel; // Define a pose for the UGV_body (specified relative to frame_id)
@@ -1156,7 +1194,7 @@ public:
 
     //note the axis of EE
     pose_magnet_panel.position.x = primitive_magnet_panel.dimensions[0]/2;
-    pose_magnet_panel.position.y = 0.02475;
+    pose_magnet_panel.position.y = 0;
     pose_magnet_panel.position.z = 0;
 
     magnet_panel.primitives.push_back(primitive_magnet_panel);
@@ -1380,7 +1418,7 @@ public:
     // ---------- Collect Whole Robot Body
 
     std::vector<moveit_msgs::CollisionObject> collision_robot_body;
-    collision_robot_body.push_back(UGV_base);
+    // collision_robot_body.push_back(UGV_base);
     collision_robot_body.push_back(UGV_base2);
     collision_robot_body.push_back(magnet_panel);
     collision_robot_body.push_back(Container_left_out);
@@ -1411,10 +1449,10 @@ public:
     // +Y: front
     // +Z: up
     target_pose.position.x =  target_pose.position.x + msg->position.x;
-    target_pose.position.y =  target_pose.position.y - msg->position.y; // Measure DIST_CAM_TO_EE, see CONSTANT part
+    target_pose.position.y =  target_pose.position.y + msg->position.y; // Measure DIST_CAM_TO_EE, see CONSTANT part
 
     // Measure DIST_CAM_TO_EE, see CONSTANT part => read button's position from camera, but we want to move EE to the button
-    target_pose.position.z =  target_pose.position.z - msg->position.z;
+    target_pose.position.z =  target_pose.position.z + msg->position.z;
     waypoints_down.push_back(target_pose);
 
     // Seong) Set planner, Max velo and Planning time
@@ -1475,7 +1513,7 @@ public:
     current_state = move_group.getCurrentState();
     current_state->copyJointGroupPositions(joint_model_group, joint_group_positions);
 
-    joint_group_positions[0] = PI/2 - PI/2;  // Radian rotate 90 from Default Position
+    joint_group_positions[0] = PI + PI/2;  // Radian rotate 90 from Default Position
 
     move_group.setJointValueTarget(joint_group_positions);
     move_group.setPlanningTime(PLANNING_TIMEOUT);
@@ -1498,8 +1536,8 @@ public:
     ros::Duration(0.5).sleep();
     target_pose = move_group.getCurrentPose().pose; // Cartesian Path from the current position
 
-    target_pose.position.x = 0.56;
-    target_pose.position.y = 0.1;
+    target_pose.position.x = -0.56;
+    target_pose.position.y = -0.1;
     target_pose.position.z = 0.65;
 
     waypoints_to_storage.push_back(target_pose);
