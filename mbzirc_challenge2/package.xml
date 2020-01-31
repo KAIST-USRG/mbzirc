@@ -7,13 +7,9 @@
   <!-- One maintainer tag required, multiple allowed, one person per tag -->
   <!-- Example:  -->
   <!-- <maintainer email="jane.doe@example.com">Jane Doe</maintainer> -->
-  <maintainer email="jedsadakorn@todo.todo">jedsadakorn</maintainer>
+  <maintainer email="j.yonchor@kaist.ac.kr">JSY</maintainer>
 
-
-  <!-- One license tag required, multiple allowed, one license per tag -->
-  <!-- Commonly used license strings: -->
-  <!--   BSD, MIT, Boost Software License, GPLv2, GPLv3, LGPLv2.1, LGPLv3 -->
-  <license>TODO</license>
+  <license>...</license>
 
   <buildtool_depend>catkin</buildtool_depend>
 
@@ -32,7 +28,7 @@
   <build_depend>tf2_eigen</build_depend>
   <build_depend>tf2_geometry_msgs</build_depend>
   <build_depend>message_generation</build_depend>
-  <build_depend>mission_manager</build_depend>
+  <build_depend>mbzirc_msgs</build_depend>
 
   <exec_depend>panda_moveit_config</exec_depend>
   <exec_depend>pluginlib</exec_depend>
@@ -52,8 +48,7 @@
   <exec_depend>tf2_geometry_msgs</exec_depend>
   <exec_depend>rosserial_python</exec_depend>
   <exec_depend>message_runtime</exec_depend>
-  <exec_depend>mission_manager</exec_depend>
-  <exec_depend>message_runtime</exec_depend>
+  <exec_depend>mbzirc_msgs</exec_depend>
 
   <export>
     <!-- Other tools can request additional information be placed here -->

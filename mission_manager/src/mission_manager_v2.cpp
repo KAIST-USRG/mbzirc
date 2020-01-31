@@ -3,8 +3,8 @@
 #include <actionlib/client/simple_action_client.h>
 #include <vector>
 // #include "mission_manager/test.h"
-#include <mission_manager/ugv_move.h>
-#include <mission_manager/ur_move.h>
+#include "mbzirc_msgs/ugv_move.h"
+#include "mbzirc_msgs/ur_move.h"
 #include "mission.h"
 #include <geometry_msgs/PoseStamped.h>
 #include <geometry_msgs/Point.h>
@@ -19,16 +19,16 @@ int main(int argc, char** argv){
   // Load mission preset param
   Mission_preset mission_preset;
 
-  ros::ServiceClient client_ugv_gps = n.serviceClient<mission_manager::ugv_move>("ugv_move_gps");
-  ros::ServiceClient client_ugv_local = n.serviceClient<mission_manager::ugv_move>("ugv_move_local")
+  ros::ServiceClient client_ugv_gps = n.serviceClient<mbzirc_msgs::ugv_move>("ugv_move_gps");
+  ros::ServiceClient client_ugv_local = n.serviceClient<mbzirc_msgs::ugv_move>("ugv_move_local")
   
   ;
   ros::ServiceClient client_conveyor = n.serviceClient<dynamixel_workbench_msgs::DynamixelCommand>("/dynamixel_workbench/dynamixel_command");
   // ros::ServiceClient client_ur = n.serviceClient<mission_manager::ur_move>("ur_move");
-  ros::ServiceClient client_ur = n.serviceClient<mission_manager::ur_move>("/mbzirc_ur5_control/ur_move");
+  ros::ServiceClient client_ur = n.serviceClient<mbzirc_msgs::ur_move>("/mbzirc_ur5_control/ur_move");
   // ros::service::waitForService("/dynamixel_workbench/dynamixel_command", -1);
 
-  mission_manager::ugv_move move_srv;
+  mbzirc_msgs::ugv_move move_srv;
   move_srv.request.target_node_name = mission_preset.get_move_ugv_target_node_name();
   move_srv.request.goal = mission_preset.get_brick_pos_tmp();
   move_srv.request.move_cmd_weight = mission_preset.get_move_ugv_cmd_vel_weight();
@@ -45,7 +45,7 @@ int main(int argc, char** argv){
   conveyor_srv.request.id = mission_preset.get_conveyor_right_id();
   conveyor_srv.request.value = mission_preset.get_conveyor_right_load_vel();
 
-  mission_manager::ur_move ur_srv;
+  mbzirc_msgs::ur_move ur_srv;
   
 
   ///////////////////////////////////////////////// REGISTER MISSION SEQUENCE ///////////////////////////////

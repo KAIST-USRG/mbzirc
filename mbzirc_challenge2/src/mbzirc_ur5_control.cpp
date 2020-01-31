@@ -33,9 +33,9 @@
 #include <moveit_msgs/CollisionObject.h>
 
 // srv
-#include "mission_manager/ur_move.h"
-#include "mbzirc_challenge2/go_to_brick.h"
-#include "mbzirc_challenge2/place_in_container.h"
+#include "mbzirc_msgs/ur_move.h"
+#include "mbzirc_msgs/go_to_brick.h"
+#include "mbzirc_msgs/place_in_container.h"
 
 // msg
 #include <std_msgs/Bool.h>
@@ -172,8 +172,8 @@ private:
 
 
   // Service
-  mbzirc_challenge2::go_to_brick go_to_brick_srv;
-  mbzirc_challenge2::place_in_container place_in_container_srv;
+  mbzirc_msgs::go_to_brick go_to_brick_srv;
+  mbzirc_msgs::place_in_container place_in_container_srv;
 
   // Node Handle
   // ros::NodeHandle node_handle;
@@ -241,8 +241,8 @@ public:
     moveToStorageSide_flag_sub = nh.subscribe("/moveToStorageSide_flag", 10, &Arm::moveToStorageSideFlagCallback, this);
 
     // Service Client
-    go_to_brick_sc = nh.serviceClient<mbzirc_challenge2::go_to_brick>("/go_to_brick");
-    place_in_container_sc = nh.serviceClient<mbzirc_challenge2::place_in_container>("/place_in_container");
+    go_to_brick_sc = nh.serviceClient<mbzirc_msgs::go_to_brick>("/go_to_brick");
+    place_in_container_sc = nh.serviceClient<mbzirc_msgs::place_in_container>("/place_in_container");
 
     // Service Server
     go_to_brick_ss = nh.advertiseService("/go_to_brick", &Arm::_goToBrickServiceCallback, this);
@@ -259,8 +259,8 @@ public:
   }
 
   // ==================== Service Callback Function ==================== //
-  bool urMoveCallback(mission_manager::ur_move::Request  &req,
-                       mission_manager::ur_move::Response  &res)
+  bool urMoveCallback(mbzirc_msgs::ur_move::Request  &req,
+                       mbzirc_msgs::ur_move::Response  &res)
   {    
     /*  The service server to communicate with mission_manager (central planner)
     */
@@ -333,8 +333,8 @@ public:
   }
 
   // ==================== Internal Service Callback Function ==================== //
-  bool _goToBrickServiceCallback(mbzirc_challenge2::go_to_brick::Request  &req,
-                        mbzirc_challenge2::go_to_brick::Response  &res)
+  bool _goToBrickServiceCallback(mbzirc_msgs::go_to_brick::Request  &req,
+                        mbzirc_msgs::go_to_brick::Response  &res)
   {
     /*  This function moves UR5 arm to get the brick
     *   1) Align the end effector yaw angle with the brick
@@ -527,8 +527,8 @@ public:
   }
 
 
-  bool _placeInContainerServiceCallback(mbzirc_challenge2::place_in_container::Request  &req,
-                                        mbzirc_challenge2::place_in_container::Response  &res)
+  bool _placeInContainerServiceCallback(mbzirc_msgs::place_in_container::Request  &req,
+                                        mbzirc_msgs::place_in_container::Response  &res)
   {
     /*  This function place brick in one of the container
     *   1) Turn the robot to the target side of the container
