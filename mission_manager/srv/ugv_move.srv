@@ -2,5 +2,8 @@ string target_node_name
 geometry_msgs/PoseStamped goal
 float64 move_cmd_weight
 float64 delay_before_start_sec
+int64 destination_name                      # BRICK=0, SEGMENT=1
+int64 target_action                         # LOAD = 0, UNLOAD = 1
+int64 target_color_brick                    # COLOR_CODE : orange=1, blue=2, green=3, red = 4
 ---
 bool success_or_fail

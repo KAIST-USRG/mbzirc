@@ -30,10 +30,11 @@ find_package(catkin REQUIRED
 )
 find_package(Boost REQUIRED system filesystem date_time thread)
 
-# add_service_files(
-#   FILES
-#   ur_move.srv
-# )
+add_service_files(
+   FILES
+   go_to_brick.srv
+   place_in_container.srv
+)
 
 
 #set(THIS_PACKAGE_INCLUDE_DIRS
