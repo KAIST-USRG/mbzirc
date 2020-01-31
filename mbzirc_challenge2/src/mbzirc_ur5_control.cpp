@@ -250,6 +250,8 @@ public:
     // Service Client
     go_to_brick_sc = nh.serviceClient<mbzirc_msgs::go_to_brick>("/go_to_brick");
     place_in_container_sc = nh.serviceClient<mbzirc_msgs::place_in_container>("/place_in_container");
+    visual_servo_XY_sc = nh.serviceClient<mbzirc_msgs::visual_servo_XY>("/visual_servo_XY");
+    visual_servo_yaw_sc = nh.serviceClient<mbzirc_msgs::visual_servo_yaw>("/visual_servo_yaw");
 
     // Service Server
     go_to_brick_ss = nh.advertiseService("/go_to_brick", &Arm::_goToBrickServiceCallback, this);
@@ -715,7 +717,7 @@ public:
       moveToDefault_finished_flag_msg.data = true;
       moveToDefault_finished_flag_pub.publish(moveToDefault_finished_flag_msg); // let the planner know that the arm is up
     }
-    
+
     //  ====================== turn the magnet on again  ====================== //
     {
       magnet_state_msg.data = true;
