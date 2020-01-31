@@ -21,6 +21,8 @@ add_service_files(DIRECTORY srv
   test.srv
   ugv_move.srv
   ur_move.srv
+  visual_servo_XY.srv
+  visual_servo_yaw.srv
 )
 
 ## Generate messages in the 'action' folder

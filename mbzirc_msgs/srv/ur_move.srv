@@ -1,7 +1,7 @@
 string target_node_name
-bool target_load_or_unload 			            # LOAD=0, UNLOAD=1
+bool target_load_or_unload 			        # LOAD=0, UNLOAD=1
 int64 target_brick_color_code 			        # COLOR_CODE : orange=1, blue=2, green=3, red = 4
-bool target_brick_container_side_left_right     # CONTAINER SIDE : LEFT=0, RIGHT=1
+bool target_brick_container_side_left_right     	# CONTAINER SIDE : LEFT=0, RIGHT=1
 ---
 bool workspace_reachable
 bool success_or_fail

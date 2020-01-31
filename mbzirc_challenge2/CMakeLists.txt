@@ -12,7 +12,6 @@ endif()
 
 find_package(catkin REQUIRED
   COMPONENTS
-    mission_manager
     interactive_markers
     moveit_core
     moveit_visual_tools
@@ -98,4 +97,4 @@ add_executable(mbzirc_ur5_control src/mbzirc_ur5_control.cpp)
 target_link_libraries(mbzirc_ur5_control ${catkin_LIBRARIES} ${Boost_LIBRARIES})
 install(TARGETS mbzirc_ur5_control DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION})
 
-#add_dependencies(mbzirc_ur5_control ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+# add_dependencies(mbzirc_ur5_control ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
