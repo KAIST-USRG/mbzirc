@@ -2,11 +2,9 @@
 
 import rospy
 from geometry_msgs.msg import PoseStamped
-from geometry_msgs.msg import Pose
 from geometry_msgs.msg import Twist
 #TODO: Change service package
 from beginner_tutorials.srv import AddTwoInts,AddTwoIntsResponse
-#from tf.transformations import euler_from_quaternion, quaternion_from_euler
 import tf
 
 class GotoBrick:
@@ -33,23 +31,14 @@ class GotoBrick:
         return AddTwoIntsResponse(req.a + req.b)
 
     def pose_callback(self, pose_msg):
-        #quaternion = (
-        #    pose_msg.pose.orientation.x,
-        #    pose_msg.pose.orientation.y,
-        #    pose_msg.pose.orientation.z,
-        #    pose_msg.pose.orientation.w)
         quaternion = (
-            pose_msg.orientation.x,
-            pose_msg.orientation.y,
-            pose_msg.orientation.z,
-            pose_msg.orientation.w)
-        euler = tf.transformations.euler_from_quaternion(quaternion)
-        self.destination_yaw = euler[2]
+            pose_msg.pose.orientation.x,
+            pose_msg.pose.orientation.y,
+            pose_msg.pose.orientation.z,
+            pose_msg.pose.orientation.w)
 
-        #self.destination_x = pose_msg.pose.position.x
-        #self.destination_y = pose_msg.pose.position.y
-        self.destination_x = pose_msg.position.x
-        self.destination_y = pose_msg.position.y
+        self.destination_x = pose_msg.pose.position.x
+        self.destination_y = pose_msg.pose.position.y
 
         rospy.loginfo('x:{} y:{} yaw:{}'.format(self.destination_x, self.destination_y, self.destination_yaw))
 
