@@ -264,8 +264,14 @@ public:
   {    
     /*  The service server to communicate with mission_manager (central planner)
     */
-    
-    // ====================== waiting camera node to command for visual servoing  ====================== //
+    // ========== Adjust Default Position According to the target container side ========== //
+    if (req.target_brick_container_side_left_right == LEFT){
+      moveToDefault(LEFT);
+    }else{
+      moveToDefault(RIGHT);
+    }
+
+    // ====================== waiting camera node to finish visual servoing  ====================== //
     std_msgs::BoolConstPtr read_cam_flag_msg = ros::topic::waitForMessage<std_msgs::Bool>("/readCamData_Flag");
     ROS_INFO("// ====================== recieve the read_cam_flag_msg ====================== //");
 
@@ -540,10 +546,7 @@ public:
     current_state = move_group.getCurrentState();
     current_state->copyJointGroupPositions(joint_model_group, joint_group_positions);
 
-    if (req.brick_container_side == LEFT)
-      joint_group_positions[0] = PI + PI/2;  // Turn left
-    else
-      joint_group_positions[0] = PI - PI/2;            // Turn right
+    joint_group_positions[0] = PI/2; // Turn UR toward the container
 
     move_group.setJointValueTarget(joint_group_positions);
     move_group.setPlanningTime(PLANNING_TIMEOUT);
@@ -569,12 +572,12 @@ public:
 
     if (req.brick_container_side == LEFT)
     {
-      target_pose.position.x = -0.56;
-      target_pose.position.y = -0.1;
+      target_pose.position.x = -0.565;
+      target_pose.position.y = 0.1;
       target_pose.position.z = 0.65;
     }else
     {
-      target_pose.position.x = 0.56;
+      target_pose.position.x = 0.565;
       target_pose.position.y = 0.1;
       target_pose.position.z = 0.65;
     }
@@ -621,7 +624,12 @@ public:
     detachBrick();
 
     //  ====================== move back to the default position  ====================== //
-    moveToDefault();
+    if (req.brick_container_side == LEFT){
+      moveToDefault(LEFT);
+    }else{
+      moveToDefault(RIGHT);
+    }
+    
     moveToDefault_finished_flag_msg.data = true;
     moveToDefault_finished_flag_pub.publish(moveToDefault_finished_flag_msg); // let the planner know that the arm is up
 
@@ -706,30 +714,19 @@ public:
   }
 
 
-  // void magnetStateCallBack(const std_msgs::Bool::ConstPtr& msg)
-  // {
-  //   /*  Turn magnet on and off
-  //   */
-  //   if (msg->data == true){
-  //     FLAG_MAGNET_ON = true;
-  //   }
-  //   else if (msg->data == false){
-  //     FLAG_MAGNET_ON = false;
-  //   }
-  // }
-
-
   void moveToDafaultFlagCallback(const std_msgs::Bool::ConstPtr& msg)
   {
     // Subscribe: moveToDefault_flag
     // Publish: moveToDefault_finish_flag
     if (msg->data == true){
-      moveToDefault();
+      moveToDefault(LEFT);
       moveToDefault_finished_flag_msg.data = true;
       moveToDefault_finished_flag_pub.publish(moveToDefault_finished_flag_msg); // let the planner know that the arm is up
 
     }else{
-      // DO NOTHING
+      moveToDefault(RIGHT);
+      moveToDefault_finished_flag_msg.data = true;
+      moveToDefault_finished_flag_pub.publish(moveToDefault_finished_flag_msg); // let the planner know that the arm is up
     }
   }
 
@@ -952,10 +949,12 @@ public:
   }
 
 
-  void moveToDefault()
+  void moveToDefault(int mode)
   {
     /*  Move the arm to the default position
     *   Upfront arm with end_effector looking down
+    *   Use mode 0: when the target container is RIGHT container
+    *   Use mode 1: when the target container is LEFT container
     */
     current_state = move_group.getCurrentState();
     ros::Duration(0.5).sleep();
@@ -964,12 +963,26 @@ public:
     std::vector<double> joint_group_positions;
     current_state->copyJointGroupPositions(joint_model_group, joint_group_positions);
 
-    joint_group_positions[0] = PI;  // Radian
-    joint_group_positions[1] = -PI/2;
-    joint_group_positions[2] = PI/180*60;
-    joint_group_positions[3] = 2 * PI - PI/180 * 60;
-    joint_group_positions[4] = -PI/2;
-    joint_group_positions[5] = 0;
+    if (mode == 0)
+    {
+      joint_group_positions[0] = 0;  // Radian
+      joint_group_positions[1] = -PI/2;
+      joint_group_positions[2] = -PI/180*60;
+      joint_group_positions[3] = PI + PI/180 * 60;
+      joint_group_positions[4] = PI/2;
+      joint_group_positions[5] = 0;
+    }else
+    {
+      joint_group_positions[0] = PI;  // Radian
+      joint_group_positions[1] = -PI/2;
+      joint_group_positions[2] = PI/180*60;
+      joint_group_positions[3] = 2 * PI - PI/180 * 60;
+      joint_group_positions[4] = -PI/2;
+      joint_group_positions[5] = 0;
+      
+    }
+    
+
     move_group.setJointValueTarget(joint_group_positions);
     move_group.setMaxVelocityScalingFactor(0.3);
     move_group.setMaxAccelerationScalingFactor(0.3);
@@ -1513,7 +1526,7 @@ public:
     current_state = move_group.getCurrentState();
     current_state->copyJointGroupPositions(joint_model_group, joint_group_positions);
 
-    joint_group_positions[0] = PI + PI/2;  // Radian rotate 90 from Default Position
+    joint_group_positions[0] = PI - PI/2;  // Radian rotate 90 from Default Position
 
     move_group.setJointValueTarget(joint_group_positions);
     move_group.setPlanningTime(PLANNING_TIMEOUT);
@@ -1536,8 +1549,8 @@ public:
     ros::Duration(0.5).sleep();
     target_pose = move_group.getCurrentPose().pose; // Cartesian Path from the current position
 
-    target_pose.position.x = -0.56;
-    target_pose.position.y = -0.1;
+    target_pose.position.x = 0.565;
+    target_pose.position.y = 0.1;
     target_pose.position.z = 0.65;
 
     waypoints_to_storage.push_back(target_pose);
