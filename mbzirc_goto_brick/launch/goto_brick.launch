@@ -1,0 +1,8 @@
+<launch>
+  <arg name="default_param" default="10"/>
+  <arg name="service_control" default="false"/>
+  <node name="goto_brick" pkg="mbzirc_goto_brick" type="goto_brick.py" output="screen">
+    <param name="default_param"    value="$(arg default_param)"/>
+    <param name="service_control"  value="$(arg service_control)"/>
+  </node>
+</launch>

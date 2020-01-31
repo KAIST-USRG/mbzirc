@@ -13,6 +13,7 @@ class GotoBrick:
         
         self.default_param = rospy.get_param('default_param', 1)
         self.service_control = rospy.get_param('service_control', True)
+        rospy.loginfo('default_param:{} service_control:{}'.format(self.default_param, self.service_control))
 
         self.raw_x = 0.0
         self.raw_y = 0.0
@@ -24,7 +25,7 @@ class GotoBrick:
         self.result_cmd_vel = Twist()
 
         self.twist_pub = rospy.Publisher('/cmd_vel', Twist, queue_size=10)
-        rospy.Subscriber('/goal_position', Pose, self.pose_callback, queue_size=10)
+        rospy.Subscriber('/goal_position', PoseStamped, self.pose_callback, queue_size=10)
 
         #self.start_flag = rospy.Service('add_two_ints', AddTwoInts, self.start_flag)
 
@@ -50,9 +51,11 @@ class GotoBrick:
 
     def calc_twist(self):
         if not detected():
+            pass
             #point turn
 
         else:
+            pass
             #goto brick
 
         
