@@ -285,42 +285,44 @@ public:
     }
     
 
-    ROS_INFO("=================== SERVICE CLIENT to Camera node: XY distance  ===================");
-    {
-      visual_servo_XY_srv.request.waiting_for_data_XY = true;
-      if(visual_servo_XY_sc.call(visual_servo_XY_srv))
-      {
-        std::cout << "visual_servo_XY_sc: Response : " << visual_servo_XY_srv.response.x << std::endl;
-        std::cout << "visual_servo_XY_sc: Response : " << visual_servo_XY_srv.response.y << std::endl;
-        moveXYZSlowly(visual_servo_XY_srv.response.x, visual_servo_XY_srv.response.y, 0, 0.02, 0.02);
-      }else 
-      {  // fail to request service
-        std::cout << "visual_servo_XY_sc: Failed to call service" << std::endl;
-        return false;
-      }
-    }
+    // ROS_INFO("=================== SERVICE CLIENT to Camera node: XY distance  ===================");
+    // {
+    //   visual_servo_XY_srv.request.waiting_for_data_XY = true;
+    //   if(visual_servo_XY_sc.call(visual_servo_XY_srv))
+    //   {
+    //     std::cout << "visual_servo_XY_sc: Response : " << visual_servo_XY_srv.response.x << std::endl;
+    //     std::cout << "visual_servo_XY_sc: Response : " << visual_servo_XY_srv.response.y << std::endl;
+    //     moveXYZSlowly(visual_servo_XY_srv.response.x, visual_servo_XY_srv.response.y, 0, 0.02, 0.02);
+    //   }else 
+    //   {  // fail to request service
+    //     std::cout << "visual_servo_XY_sc: Failed to call service" << std::endl;
+    //     return false;
+    //   }
+    // }
 
     
-    ROS_INFO("================== SERVICE CLIENT to Camera node: yaw distance  ==================");
-    {
-      visual_servo_yaw_srv.request.waiting_for_data_yaw = true;
-      if(visual_servo_yaw_sc.call(visual_servo_yaw_srv))
-      {
-        std::cout << "visual_servo_yaw_sc: Response : " << visual_servo_yaw_srv.response.yaw << std::endl;
-        moveYawSlowly(LEFT, 0.02, 0.02);
-        if(FLAG_YAW_INCORRECT == true)
-        {
-          resetYaw();
-          moveYawSlowly(RIGHT, 0.02, 0.02);
-          finish_stop_yaw_msg.data = true;
-          finish_stop_yaw_pub.publish(finish_stop_yaw_msg);
-        }
-      }else 
-      {  // fail to request service
-        std::cout << "visual_servo_yaw_sc: Failed to call service" << std::endl;
-        return false;
-      }
-    }
+    // ROS_INFO("================== SERVICE CLIENT to Camera node: yaw distance  ==================");
+    // {
+    //   visual_servo_yaw_srv.request.waiting_for_data_yaw = true;
+    //   if(visual_servo_yaw_sc.call(visual_servo_yaw_srv))
+    //   {
+    //     std::cout << "visual_servo_yaw_sc: Response : " << visual_servo_yaw_srv.response.yaw << std::endl;
+    //     moveYawSlowly(LEFT, 0.02, 0.02);
+    //     if(FLAG_YAW_INCORRECT == true)
+    //     {
+    //       resetYaw();
+    //       moveYawSlowly(RIGHT, 0.02, 0.02);
+    //       finish_stop_yaw_msg.data = true;
+    //       finish_stop_yaw_pub.publish(finish_stop_yaw_msg);
+    //     }
+    //   }else 
+    //   {  // fail to request service
+    //     std::cout << "visual_servo_yaw_sc: Failed to call service" << std::endl;
+    //     return false;
+    //   }
+    // }
+    ROS_INFO("====================== at default position ======================");
+    // std_msgs::BoolConstPtr test_msg = ros::topic::waitForMessage<std_msgs::Bool>("/moveToDefault_finish_flag");
 
     ROS_INFO("====================== Trigger to read data from camera ======================");
     {
@@ -560,8 +562,8 @@ public:
       {
         joint_group_positions[0] = 0;  // Radian
         joint_group_positions[1] = -PI/2;
-        joint_group_positions[2] = -PI/180*45;
-        joint_group_positions[3] = PI + PI/180 * 45;
+        joint_group_positions[2] = -PI/180*15;
+        joint_group_positions[3] = PI + PI/180 * 15;
         joint_group_positions[4] = PI/2;
         joint_group_positions[5] = 0;
       }
@@ -569,8 +571,8 @@ public:
       {
         joint_group_positions[0] = PI;  // Radian
         joint_group_positions[1] = -PI/2;
-        joint_group_positions[2] = PI/180 * 45;
-        joint_group_positions[3] = 2 * PI - PI/180 * 45;
+        joint_group_positions[2] = PI/180 * 15;
+        joint_group_positions[3] = 2 * PI - PI/180 * 15;
         joint_group_positions[4] = -PI/2;
         joint_group_positions[5] = 0;
       }
@@ -652,19 +654,19 @@ public:
 
       if (req.brick_container_side == LEFT)
       {
-        target_pose.position.x = -0.565;
+        target_pose.position.x = -0.59;
         target_pose.position.y = 0.1;
         target_pose.position.z = 0.65;
       }else
       {
-        target_pose.position.x = 0.565;
+        target_pose.position.x = 0.59;
         target_pose.position.y = 0.1;
         target_pose.position.z = 0.65;
       }
 
       waypoints_to_storage.push_back(target_pose);
 
-      target_pose.position.z = (req.order_of_this_brick  - 1) * 0.22;
+      target_pose.position.z = -0.20 + (req.order_of_this_brick  - 1) * 0.22;
 
       waypoints_to_storage.push_back(target_pose);
 
@@ -702,7 +704,6 @@ public:
       magnet_state_msg.data = false;
       magnet_state_pub.publish(magnet_state_msg); // MAGNET OFF
       ROS_INFO("_placeInContainerServiceCallback: MAGNET_OFF");
-      ros::Duration(2).sleep();
       detachBrick();
     }
 
@@ -806,13 +807,12 @@ public:
     // Publish: moveToDefault_finish_flag
     if (msg->data == true){
       moveToDefault(LEFT);
-      moveToDefault_finished_flag_msg.data = true;
-      moveToDefault_finished_flag_pub.publish(moveToDefault_finished_flag_msg); // let the planner know that the arm is up
-
+      // moveToDefault_finished_flag_msg.data = true;
+      // moveToDefault_finished_flag_pub.publish(moveToDefault_finished_flag_msg); // let the planner know that the arm is up
     }else{
       moveToDefault(RIGHT);
-      moveToDefault_finished_flag_msg.data = true;
-      moveToDefault_finished_flag_pub.publish(moveToDefault_finished_flag_msg); // let the planner know that the arm is up
+      // moveToDefault_finished_flag_msg.data = true;
+      // moveToDefault_finished_flag_pub.publish(moveToDefault_finished_flag_msg); // let the planner know that the arm is up
     }
   }
 
@@ -1080,6 +1080,9 @@ public:
     #endif
 
     move_group.move();                      // BLOCKING FUNCTION
+    moveToDefault_finished_flag_msg.data = true;
+    ROS_INFO("publish moveToDefault_finished_flag_msg");
+    moveToDefault_finished_flag_pub.publish(moveToDefault_finished_flag_msg); // let the planner know that the arm is up
   }
 
 
@@ -1265,6 +1268,33 @@ public:
     UGV_base2.primitive_poses.push_back(pose_UGV_base2);
     UGV_base2.operation = UGV_base2.ADD;
 
+    // ---------- Belt Motor
+    moveit_msgs::CollisionObject belt_motor; // Define a collision object ROS message.
+    belt_motor.header.frame_id = move_group.getPlanningFrame();
+
+    belt_motor.id = "belt_motor"; // The id of the object is used to identify it.
+
+    shape_msgs::SolidPrimitive primitive_belt_motor; // Define UGV_base dimension (in meter)
+    primitive_belt_motor.type = primitive_belt_motor.BOX;
+    primitive_belt_motor.dimensions.resize(3);
+    primitive_belt_motor.dimensions[0] = 0.15;  // x right
+    primitive_belt_motor.dimensions[1] = 0.17;  // y front
+    primitive_belt_motor.dimensions[2] = 0.10;  // z up
+
+    geometry_msgs::Pose pose_belt_motor; // Define a pose for the Robot_bottom (specified relative to frame_id)
+    q.setRPY(0, 0, 0);
+    pose_belt_motor.orientation.x = q[0];
+    pose_belt_motor.orientation.y = q[1];
+    pose_belt_motor.orientation.z = q[2];
+    pose_belt_motor.orientation.w = q[3];
+    pose_belt_motor.position.x = primitive_belt_motor.dimensions[0]/2 - 0.02;
+    pose_belt_motor.position.y = primitive_belt_motor.dimensions[1]/2;
+    pose_belt_motor.position.z = primitive_belt_motor.dimensions[2]/2;
+
+    belt_motor.primitives.push_back(primitive_belt_motor);
+    belt_motor.primitive_poses.push_back(pose_belt_motor);
+    belt_motor.operation = belt_motor.ADD;
+
     // ---------- Magnet Panel at end effector
     moveit_msgs::CollisionObject magnet_panel;
     magnet_panel.header.frame_id = move_group.getEndEffectorLink(); // reference to end-effector frame
@@ -1307,7 +1337,7 @@ public:
     primitive_Container_left_out.dimensions.resize(3);
     primitive_Container_left_out.dimensions[0] = 0.03;  // x right
     primitive_Container_left_out.dimensions[1] = 1.20;  // y front
-    primitive_Container_left_out.dimensions[2] = 1.0;  // z up
+    primitive_Container_left_out.dimensions[2] = 1.19;  // z up
 
     geometry_msgs::Pose pose_Container_left_out; // Define a pose for the Robot_bottom (specified relative to frame_id)
     q.setRPY(0, 0, 0);
@@ -1317,7 +1347,7 @@ public:
     pose_Container_left_out.orientation.w = q[3];
     pose_Container_left_out.position.x = -primitive_Container_left_out.dimensions[0]/2 - primitive_UGV_base.dimensions[0] / 2 - 0.33;
     pose_Container_left_out.position.y = -primitive_Container_left_out.dimensions[1]/2 + 0.05/2 + 0.08 + 0.04;
-    pose_Container_left_out.position.z = primitive_Container_left_out.dimensions[2]/2 - 0.30 - 0.30;
+    pose_Container_left_out.position.z = primitive_Container_left_out.dimensions[2]/2 - 0.59;
 
     Container_left_out.primitives.push_back(primitive_Container_left_out);
     Container_left_out.primitive_poses.push_back(pose_Container_left_out);
@@ -1334,7 +1364,7 @@ public:
     primitive_Container_left_in.dimensions.resize(3);
     primitive_Container_left_in.dimensions[0] = 0.03;  // x right
     primitive_Container_left_in.dimensions[1] = 0.95;  // y front
-    primitive_Container_left_in.dimensions[2] = 0.8;  // z up
+    primitive_Container_left_in.dimensions[2] = 0.63;  // z up
 
     geometry_msgs::Pose pose_Container_left_in; // Define a pose for the Robot_bottom (specified relative to frame_id)
     q.setRPY(0, 0, 0);
@@ -1344,7 +1374,7 @@ public:
     pose_Container_left_in.orientation.w = q[3];
     pose_Container_left_in.position.x = -primitive_Container_left_in.dimensions[0]/2 - 0.4;
     pose_Container_left_in.position.y = -0.58 - 0.15;
-    pose_Container_left_in.position.z = primitive_Container_left_in.dimensions[2]/2 - 0.30 - 0.30;
+    pose_Container_left_in.position.z = primitive_Container_left_in.dimensions[2]/2 - 0.59;
 
     Container_left_in.primitives.push_back(primitive_Container_left_in);
     Container_left_in.primitive_poses.push_back(pose_Container_left_in);
@@ -1361,7 +1391,7 @@ public:
     primitive_Container_left_low_in.dimensions.resize(3);
     primitive_Container_left_low_in.dimensions[0] = 0.03;  // x right
     primitive_Container_left_low_in.dimensions[1] = primitive_UGV_base.dimensions[1];  // y front
-    primitive_Container_left_low_in.dimensions[2] = primitive_UGV_base.dimensions[2];  // z up
+    primitive_Container_left_low_in.dimensions[2] = 0.63;  // z up
 
     geometry_msgs::Pose pose_Container_left_low_in; // Define a pose for the Robot_bottom (specified relative to frame_id)
     q.setRPY(0, 0, 0);
@@ -1371,7 +1401,7 @@ public:
     pose_Container_left_low_in.orientation.w = q[3];
     pose_Container_left_low_in.position.x = -primitive_Container_left_low_in.dimensions[0]/2 - 0.4;
     pose_Container_left_low_in.position.y = pose_UGV_base.position.y;
-    pose_Container_left_low_in.position.z = pose_UGV_base.position.z;
+    pose_Container_left_low_in.position.z = primitive_Container_left_low_in.dimensions[2]/2 - 0.59;
 
     Container_left_low_in.primitives.push_back(primitive_Container_left_low_in);
     Container_left_low_in.primitive_poses.push_back(pose_Container_left_low_in);
@@ -1388,7 +1418,7 @@ public:
     primitive_Container_right_out.dimensions.resize(3);
     primitive_Container_right_out.dimensions[0] = 0.03;  // x right
     primitive_Container_right_out.dimensions[1] = 1.20;  // y front
-    primitive_Container_right_out.dimensions[2] = 1.0;  // z up
+    primitive_Container_right_out.dimensions[2] = 1.19;  // z up
 
     geometry_msgs::Pose pose_Container_right_out; // Define a pose for the Robot_bottom (specified relative to frame_id)
     q.setRPY(0, 0, 0);
@@ -1398,7 +1428,7 @@ public:
     pose_Container_right_out.orientation.w = q[3];
     pose_Container_right_out.position.x = primitive_Container_right_out.dimensions[0]/2 + primitive_UGV_base.dimensions[0] / 2 + 0.33;
     pose_Container_right_out.position.y = -primitive_Container_right_out.dimensions[1]/2 + 0.05/2 + 0.08 + 0.04;
-    pose_Container_right_out.position.z = primitive_Container_right_out.dimensions[2]/2 - 0.30 - 0.30;
+    pose_Container_right_out.position.z = primitive_Container_right_out.dimensions[2]/2 - 0.59;
 
     Container_right_out.primitives.push_back(primitive_Container_right_out);
     Container_right_out.primitive_poses.push_back(pose_Container_right_out);
@@ -1415,7 +1445,7 @@ public:
     primitive_Container_right_in.dimensions.resize(3);
     primitive_Container_right_in.dimensions[0] = 0.03;  // x right
     primitive_Container_right_in.dimensions[1] = 0.95;  // y front
-    primitive_Container_right_in.dimensions[2] = 0.8;  // z up
+    primitive_Container_right_in.dimensions[2] = 0.63;  // z up
 
     geometry_msgs::Pose pose_Container_right_in; // Define a pose for the Robot_bottom (specified relative to frame_id)
     q.setRPY(0, 0, 0);
@@ -1425,13 +1455,13 @@ public:
     pose_Container_right_in.orientation.w = q[3];
     pose_Container_right_in.position.x = primitive_Container_right_in.dimensions[0]/2 + 0.4;
     pose_Container_right_in.position.y = -0.58 - 0.15;
-    pose_Container_right_in.position.z = primitive_Container_right_in.dimensions[2]/2 - 0.30 - 0.30;
+    pose_Container_right_in.position.z = primitive_Container_right_in.dimensions[2]/2 - 0.59;
 
     Container_right_in.primitives.push_back(primitive_Container_right_in);
     Container_right_in.primitive_poses.push_back(pose_Container_right_in);
     Container_right_in.operation = Container_right_in.ADD;
 
-    // ---------- Container_left_low_in
+    // ---------- Container_right_low_in
     moveit_msgs::CollisionObject Container_right_low_in; // Define a collision object ROS message.
     Container_right_low_in.header.frame_id = move_group.getPlanningFrame();
 
@@ -1442,7 +1472,7 @@ public:
     primitive_Container_right_low_in.dimensions.resize(3);
     primitive_Container_right_low_in.dimensions[0] = 0.03;  // x right
     primitive_Container_right_low_in.dimensions[1] = primitive_UGV_base.dimensions[1];  // y front
-    primitive_Container_right_low_in.dimensions[2] = primitive_UGV_base.dimensions[2];  // z up
+    primitive_Container_right_low_in.dimensions[2] = 0.63;  // z up
 
     geometry_msgs::Pose pose_Container_right_low_in; // Define a pose for the Robot_bottom (specified relative to frame_id)
     q.setRPY(0, 0, 0);
@@ -1452,7 +1482,7 @@ public:
     pose_Container_right_low_in.orientation.w = q[3];
     pose_Container_right_low_in.position.x = pose_Container_right_in.position.x;
     pose_Container_right_low_in.position.y = pose_UGV_base.position.y;
-    pose_Container_right_low_in.position.z = pose_UGV_base.position.z;
+    pose_Container_right_low_in.position.z = primitive_Container_right_in.dimensions[2]/2 - 0.59;
 
     Container_right_low_in.primitives.push_back(primitive_Container_right_low_in);
     Container_right_low_in.primitive_poses.push_back(pose_Container_right_low_in);
@@ -1504,7 +1534,7 @@ public:
     pose_ground_container.orientation.w = q[3];
     pose_ground_container.position.x = 0;
     pose_ground_container.position.y = -primitive_UGV_base.dimensions[1]/2 + 0.05/2 + 0.04;
-    pose_ground_container.position.z = - primitive_ground_container.dimensions[2]/2 - (primitive_UGV_base.dimensions[2] - 0.20);
+    pose_ground_container.position.z = primitive_ground_container.dimensions[2]/2 - 0.43;
 
     ground_container.primitives.push_back(primitive_ground_container);
     ground_container.primitive_poses.push_back(pose_ground_container);
@@ -1513,13 +1543,14 @@ public:
     // ---------- Collect Whole Robot Body
 
     std::vector<moveit_msgs::CollisionObject> collision_robot_body;
-    // collision_robot_body.push_back(UGV_base);
+    collision_robot_body.push_back(UGV_base);
     collision_robot_body.push_back(UGV_base2);
+    collision_robot_body.push_back(belt_motor);
     collision_robot_body.push_back(magnet_panel);
     collision_robot_body.push_back(Container_left_out);
     collision_robot_body.push_back(Container_left_in);
     collision_robot_body.push_back(Container_left_low_in);
-    // collision_robot_body.push_back(Container_right_out);
+    collision_robot_body.push_back(Container_right_out);
     collision_robot_body.push_back(Container_right_in);
     collision_robot_body.push_back(Container_right_low_in);
     collision_robot_body.push_back(ground);

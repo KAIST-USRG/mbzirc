@@ -1,0 +1,10 @@
+<?xml version="1.0"?>
+<launch>
+
+   <!-- Initialize RVIZ -->
+  <include file="$(find ur5_moveit_config)/launch/demo.launch"/>
+
+  <!-- Initialize the UR5 controller node -->
+  <node name="mbzirc_ur5_control" pkg="mbzirc_challenge2" type="mbzirc_ur5_control" respawn="false" output="screen"/>
+
+ </launch>
