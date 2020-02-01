@@ -13,26 +13,22 @@ class GotoBrick:
     def __init__(self):
         rospy.init_node('goto_brick', anonymous=True)
         
-        self.default_param = rospy.get_param('default_param', 1)
-        self.service_control = rospy.get_param('service_control', True)
-        rospy.loginfo('default_param:{} service_control:{}'.format(self.default_param, self.service_control))
+        self.x_axis_reduce_gain          = rospy.get_param('~x_gain', 0.2)
+        self.y_axis_reduce_gain          = rospy.get_param('~y_gain', 0.2)
+        self.service_control             = rospy.get_param('~service_control', True)
 
-        self.raw_x = -1.0
-        self.raw_y = -1.0
-        self.raw_yaw = -1.0
-        self.x_axis_reduce_gain = 0.1
-        self.y_axis_reduce_gain = 0.1
-        self.destination_x = 0.0
-        self.destination_y = 0.0
-        self.destination_yaw = 0.0
-        self.result_cmd_vel = Twist()
+        self.raw_x                       = -1.0
+        self.raw_y                       = -1.0
+        self.raw_yaw                     = -1.0
+        self.destination_x               = 0.0
+        self.destination_y               = 0.0
+        self.destination_yaw             = 0.0
+        self.result_cmd_vel              = Twist()
 
         self.twist_pub = rospy.Publisher('/cmd_vel', Twist, queue_size=10)
         rospy.Subscriber('/goal_position', PoseStamped, self.pose_callback, queue_size=10)
 
         #self.start_flag = rospy.Service('add_two_ints', AddTwoInts, self.start_flag)
-
-        #rospy.spin()
 
     def handle_add_two_ints(self, service_msg):
         rospy.loginfo('Service received!')
