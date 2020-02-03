@@ -234,9 +234,9 @@ public:
     
     manual_moveXVZ_sub = nh.subscribe("/manual_moveXVZ", 10, &Arm::manual_moveXYZ, this);
     moveToDefault_flag_sub = nh.subscribe("/moveToDefault_flag", 10, &Arm::moveToDafaultFlagCallback, this);
-    plate_xy_offset_sub = nh.subscribe("/plate_xy_offset", 1, &Arm::plateXYOffsetCallback, this);
+    // plate_xy_offset_sub = nh.subscribe("/plate_xy_offset", 1, &Arm::plateXYOffsetCallback, this);
     plate_yaw_incorrect_sub = nh.subscribe("/plate_yaw_incorrect", 1, &Arm::plateYawIncorrectCallback, this);
-    plate_yaw_move_sub = nh.subscribe("/plate_yaw_move", 1, &Arm::plateYawMoveCallback, this);
+    // plate_yaw_move_sub = nh.subscribe("/plate_yaw_move", 1, &Arm::plateYawMoveCallback, this);
     pose_from_cam_sub = nh.subscribe("/brick_pose", 10, &Arm::calcAvgCallback, this);
     // moveXYZ_sub = nh.subscribe("avg_pose", 10, &Arm::_moveXYZCallback, this);
     readCamData_flag_sub = nh.subscribe("/readCamData_Flag", 100, &Arm::readCamDataFlagCallback, this);
@@ -244,14 +244,11 @@ public:
     switch_state_sub = nh.subscribe("/switch_state", 1, &Arm::switchStateCallback, this);
     
 
-    // DEBUG
-    moveToStorageSide_flag_sub = nh.subscribe("/moveToStorageSide_flag", 10, &Arm::moveToStorageSideFlagCallback, this);
-
     // Service Client
     go_to_brick_sc = nh.serviceClient<mbzirc_msgs::go_to_brick>("/go_to_brick");
     place_in_container_sc = nh.serviceClient<mbzirc_msgs::place_in_container>("/place_in_container");
     visual_servo_XY_sc = nh.serviceClient<mbzirc_msgs::visual_servo_XY>("/visual_servo_XY");
-    visual_servo_yaw_sc = nh.serviceClient<mbzirc_msgs::visual_servo_yaw>("/visual_servo_yaw");
+    // visual_servo_yaw_sc = nh.serviceClient<mbzirc_msgs::visual_servo_yaw>("/visual_servo_yaw");
 
     // Service Server
     go_to_brick_ss = nh.advertiseService("/go_to_brick", &Arm::_goToBrickServiceCallback, this);
@@ -265,6 +262,8 @@ public:
     magnet_state_pub.publish(magnet_state_msg);
     ROS_INFO("Initialize: MAGNET_ON");
 
+    // DEBUG
+    moveToStorageSide_flag_sub = nh.subscribe("/moveToStorageSide_flag", 10, &Arm::moveToStorageSideFlagCallback, this);
   }
 
   // ==================== Service Callback Function ==================== //
@@ -285,14 +284,29 @@ public:
     }
     
 
-    // ROS_INFO("=================== SERVICE CLIENT to Camera node: XY distance  ===================");
+    // ROS_INFO("============== SERVICE CLIENT to Camera node: Visual Servo XY ==============");
     // {
     //   visual_servo_XY_srv.request.waiting_for_data_XY = true;
     //   if(visual_servo_XY_sc.call(visual_servo_XY_srv))
     //   {
     //     std::cout << "visual_servo_XY_sc: Response : " << visual_servo_XY_srv.response.x << std::endl;
     //     std::cout << "visual_servo_XY_sc: Response : " << visual_servo_XY_srv.response.y << std::endl;
-    //     moveXYZSlowly(visual_servo_XY_srv.response.x, visual_servo_XY_srv.response.y, 0, 0.02, 0.02);
+    //     float MAX_DIST = 0.20;
+    //     bool reachable = moveXYZSlowly(visual_servo_XY_srv.response.x * MAX_DIST, 
+    //                                    visual_servo_XY_srv.response.y  * MAX_DIST, 
+    //                                    0, 0.02, 0.02);
+
+    //     if (reachable != true)  // arm cannot reach, tell the mission manager
+    //     {
+    //       res.workspace_reachable = false;
+    //       if (req.target_brick_container_side_left_right == LEFT){
+    //         moveToDefault(LEFT);
+    //       }else
+    //       {
+    //         moveToDefault(RIGHT);
+    //       }
+    //       return true;
+    //     }
     //   }else 
     //   {  // fail to request service
     //     std::cout << "visual_servo_XY_sc: Failed to call service" << std::endl;
@@ -301,26 +315,34 @@ public:
     // }
 
     
-    // ROS_INFO("================== SERVICE CLIENT to Camera node: yaw distance  ==================");
-    // {
-    //   visual_servo_yaw_srv.request.waiting_for_data_yaw = true;
-    //   if(visual_servo_yaw_sc.call(visual_servo_yaw_srv))
-    //   {
-    //     std::cout << "visual_servo_yaw_sc: Response : " << visual_servo_yaw_srv.response.yaw << std::endl;
-    //     moveYawSlowly(LEFT, 0.02, 0.02);
-    //     if(FLAG_YAW_INCORRECT == true)
-    //     {
-    //       resetYaw();
-    //       moveYawSlowly(RIGHT, 0.02, 0.02);
-    //       finish_stop_yaw_msg.data = true;
-    //       finish_stop_yaw_pub.publish(finish_stop_yaw_msg);
-    //     }
-    //   }else 
-    //   {  // fail to request service
-    //     std::cout << "visual_servo_yaw_sc: Failed to call service" << std::endl;
-    //     return false;
-    //   }
-    // }
+    ROS_INFO("================== Visual Servo yaw  ==================");
+    {
+      moveYawSlowly(LEFT, 0.02, 0.02);
+      if(FLAG_YAW_INCORRECT == true)
+      {
+        resetYaw();
+        moveYawSlowly(RIGHT, 0.02, 0.02);
+        finish_stop_yaw_msg.data = true;
+        finish_stop_yaw_pub.publish(finish_stop_yaw_msg);
+      }
+      // visual_servo_yaw_srv.request.waiting_for_data_yaw = true;
+      // if(visual_servo_yaw_sc.call(visual_servo_yaw_srv))
+      // {
+      //   std::cout << "visual_servo_yaw_sc: Response : " << visual_servo_yaw_srv.response.yaw << std::endl;
+      //   moveYawSlowly(LEFT, 0.02, 0.02);
+      //   if(FLAG_YAW_INCORRECT == true)
+      //   {
+      //     resetYaw();
+      //     moveYawSlowly(RIGHT, 0.02, 0.02);
+      //     finish_stop_yaw_msg.data = true;
+      //     finish_stop_yaw_pub.publish(finish_stop_yaw_msg);
+      //   }
+      // }else 
+      // {  // fail to request service
+      //   std::cout << "visual_servo_yaw_sc: Failed to call service" << std::endl;
+      //   return false;
+      // }
+    }
     ROS_INFO("====================== at default position ======================");
     // std_msgs::BoolConstPtr test_msg = ros::topic::waitForMessage<std_msgs::Bool>("/moveToDefault_finish_flag");
 
@@ -853,7 +875,11 @@ public:
     if(msg->data == true)
     {
       ROS_INFO("plateYawIncorrectCallback: wrong direction of yaw");
+      FLAG_YAW_INCORRECT = true;
       move_group.stop();
+      
+      // resetYaw();
+      // moveYawSlowly(RIGHT, 0.02, 0.02);
     }
     else
     {
@@ -1086,7 +1112,7 @@ public:
   }
 
 
-  void moveXYZSlowly(float X, float Y, float Z, float max_v_scaling, float max_a_scaling)
+  bool moveXYZSlowly(float X, float Y, float Z, float max_v_scaling, float max_a_scaling)
   {
     /* This function moves the end_effector slowly in Cartesian plane
     *  The input XYZ is the distance with respect to UGV frame
@@ -1119,6 +1145,8 @@ public:
       if (fraction == 1.0)
         break;
     }
+    if (fraction != 1.0)
+      return false;
 
     // ================================= modify the velocity of Cartesian path ================================= //
     // First create a RobotTrajectory object
@@ -1139,6 +1167,7 @@ public:
     #endif
 
     move_group.execute(cartesian_plan);
+    return true;
   }
 
 
