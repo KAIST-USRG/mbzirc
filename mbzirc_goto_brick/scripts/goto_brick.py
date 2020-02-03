@@ -70,7 +70,10 @@ class GotoBrick:
         pass
 
     def is_arrived(self):
-        return False
+        if 0.0 < self.raw_x < 0.5 and 0.0 < self.raw_y < 0.5:
+            return True
+        else:
+            return False
 
     def run(self):
         r = rospy.Rate(20)
