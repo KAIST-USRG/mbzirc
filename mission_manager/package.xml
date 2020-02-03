@@ -18,8 +18,11 @@
   <build_depend>sensor_msgs</build_depend>
   <build_depend>dynamixel_sdk</build_depend>
   <build_depend>dynamixel_workbench_msgs</build_depend>
+<<<<<<< HEAD
   <build_depend>mbzirc_msgs</build_depend>
 	
+=======
+>>>>>>> navigation
   <run_depend>roscpp</run_depend>
   <run_depend>std_msgs</run_depend>
   <run_depend>sensor_msgs</run_depend>
@@ -27,7 +30,10 @@
   <run_depend>message_runtime</run_depend>
   <run_depend>dynamixel_sdk</run_depend>
   <run_depend>dynamixel_workbench_msgs</run_depend>
+<<<<<<< HEAD
   <run_depend>mbzirc_msgs</run_depend>
+=======
+>>>>>>> navigation
 
 
   <!-- The export tag contains other, unspecified, tags -->

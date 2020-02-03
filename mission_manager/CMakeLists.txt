@@ -15,7 +15,10 @@ find_package(catkin REQUIRED COMPONENTS
   geometry_msgs
   dynamixel_sdk
   dynamixel_workbench_msgs
+<<<<<<< HEAD
   mbzirc_msgs
+=======
+>>>>>>> navigation
 )
 
 add_definitions(-std=c++11)# -m64) #-Wall)
@@ -30,12 +33,21 @@ add_definitions(-std=c++11)# -m64) #-Wall)
 ## LIBRARIES: libraries you create in this project that dependent projects also need
 ## CATKIN_DEPENDS: catkin_packages dependent projects also need
 ## DEPENDS: system dependencies of this project that dependent projects also need
+<<<<<<< HEAD
 #add_service_files(
 #  FILES
 #  test.srv
 #  ugv_move.srv
 #  ur_move.srv
 #)
+=======
+add_service_files(
+  FILES
+  test.srv
+  ugv_move.srv
+  ur_move.srv
+)
+>>>>>>> navigation
 
 generate_messages(
   DEPENDENCIES
@@ -70,14 +82,22 @@ include_directories(
 
 
 
+<<<<<<< HEAD
 add_executable(mission_manager_node src/mission_manager_v2.cpp)
+=======
+add_executable(mission_manager_node src/mission_manager.cpp)
+>>>>>>> navigation
 
 target_link_libraries(
 	mission_manager_node
         ${catkin_LIBRARIES}
 )
 
+<<<<<<< HEAD
 # add_dependencies(mission_manager_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+=======
+add_dependencies(mission_manager_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+>>>>>>> navigation
 
 
 

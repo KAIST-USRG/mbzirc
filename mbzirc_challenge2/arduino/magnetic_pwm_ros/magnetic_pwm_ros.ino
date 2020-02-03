@@ -22,14 +22,22 @@ bool current_status;
 
 // switch
 int ledPin = 13;                // choose the pin for the LED
+<<<<<<< HEAD
 int inputPin_s1 = 2;     
 int inputPin_s2 = 3;  
          
+=======
+int inputPin = 11;               // Connect sensor to input pin 3
+>>>>>>> navigation
 
 std_msgs::Bool switch_state_msg;
 ros::Publisher switch_state_pub("switch_state", &switch_state_msg); // switch
 
 
+<<<<<<< HEAD
+=======
+
+>>>>>>> navigation
 void messageCb( const std_msgs::Bool& magnet_on_msg) {
   if (magnet_on_msg.data) {
     myservo_l.write(175);                  // sets the servo position according to the scaled value
@@ -63,6 +71,7 @@ void setup() {
   nh.advertise(switch_state_pub);
   Serial.begin(9600);
   
+<<<<<<< HEAD
   myservo_l.attach(10);  // attaches the servo on pin 10 to the servo object
   myservo_r.attach(11);
   flag = 0;
@@ -71,11 +80,19 @@ void setup() {
   pinMode(inputPin_s1, INPUT);     // declare Micro switch as input
   pinMode(inputPin_s2, INPUT);     // declare Micro switch as input
 
+=======
+  myservo.attach(10);  // attaches the servo on pin 10 to the servo object
+  flag = 0;
+  current_status = 0;
+  
+  pinMode(inputPin, INPUT);     // declare Micro switch as input
+>>>>>>> navigation
   pinMode(ledPin, OUTPUT);      // declare LED as output
 }
 
 
 void loop() {
+<<<<<<< HEAD
   int read_input_s1 = digitalRead(inputPin_s1);  // read input value
   int read_input_s2 = digitalRead(inputPin_s2);  // read input value
 
@@ -89,6 +106,18 @@ void loop() {
     digitalWrite(ledPin, LOW);     // turn LED OFF
     switch_state_msg.data = false;
     switch_state_pub.publish( &switch_state_msg );
+=======
+  int read_input = digitalRead(inputPin);  // read input value
+  if (read_input == HIGH) {                // check if the input is HIGH
+    digitalWrite(ledPin, LOW);      // turn LED OFF
+    switch_state_msg.data = false;
+    switch_state_pub.publish( &switch_state_msg );
+  } else {
+    digitalWrite(ledPin, HIGH);     // turn LED ON
+    switch_state_msg.data = true;
+    switch_state_pub.publish( &switch_state_msg );
+    Serial.println("Switch Pressed!");
+>>>>>>> navigation
   }
   nh.spinOnce();
   delay(1);
