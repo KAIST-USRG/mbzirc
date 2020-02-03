@@ -4,8 +4,8 @@
     <arg name="calibrate_on_startup" default="true"/>
     <arg name="engage_on_startup"    default="true"/>
 
-    <arg name="publish_odom"        default="false"/>
-    <arg name="publish_odom_tf"     default="false"/>
+    <arg name="publish_odom"        default="true"/>
+    <arg name="publish_odom_tf"     default="true"/>
     
     <arg name="output"    default="screen"/>
     <arg name="respawn"   default="false"/>
@@ -15,7 +15,7 @@
 
     <arg name="use_preroll"   default="true"/>
 
-    <arg name="rpm_gain"   default="13"/>
+    <arg name="rpm_gain"   default="1.5"/>
     <arg name="axis_for_right"   default="1"/>
 
     <arg name="front_serial_number"   default="20803592524B"/>

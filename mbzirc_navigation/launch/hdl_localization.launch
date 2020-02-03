@@ -11,13 +11,13 @@
   <!--node pkg="tf2_ros" type="static_transform_publisher" name="lidar2base_publisher" args="0 0 1.0 0 0 0 base_link os1_sensor" />
   <node pkg="tf2_ros" type="static_transform_publisher" name="imu2base_publisher" args="0 0 0.5 0 0 0 base_link gx5_link" /-->
   <!-- in case you use velodyne_driver, comment out the following line -->
-  <node pkg="nodelet" type="nodelet" name="$(arg nodelet_manager)" args="manager" output="screen"/>
+  <!--node pkg="nodelet" type="nodelet" name="$(arg nodelet_manager)" args="manager" output="screen"/-->
 
     <!-- globalmap_server_nodelet -->
     <node pkg="nodelet" type="nodelet" name="globalmap_server_nodelet" args="load hdl_localization/GlobalmapServerNodelet $(arg nodelet_manager)">
       <!--param name="globalmap_pcd" value="$(find mbzirc_navigation)/map/KI_1F_puck.pcd" /-->
       <param name="globalmap_pcd" value="$(find mbzirc_navigation)/map/KI_2F_ouster.pcd" />
-      <param name="downsample_resolution" value="0.3" />
+      <param name="downsample_resolution" value="0.1" />
     </node>
 
     <!-- hdl_localization_nodelet -->
