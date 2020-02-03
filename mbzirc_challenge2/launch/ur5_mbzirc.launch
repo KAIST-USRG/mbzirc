@@ -15,7 +15,7 @@
   </include>
 
   <!-- Initialize the UR5 controller node -->
-  <node name="UR5_controller" pkg="mbzirc_challenge2" type="mbzirc_ur5_control" respawn="false" output="screen">
+  <node name="mbzirc_ur5_control" pkg="mbzirc_challenge2" type="mbzirc_ur5_control" respawn="false" output="screen">
   </node>
 
   <!-- Initialize Arduino: Switch -->

@@ -46,7 +46,7 @@ rosservice call /front/odrive/calibrate_motors "{}"
 ## To run ur5
 1. Connect to UR5 arm using ur_modern_driver package
 
-`roslaunch ur_modern_driver ur5_bringup.launch robot_ip:=192.168.1.102 [reverse_port:=REVERSE_PORT]`
+`roslaunch ur_modern_driver ur5_bringup.launch robot_ip:=192.168.2.102 [reverse_port:=REVERSE_PORT]`
 
 2. Launch the planning node
 
@@ -58,7 +58,7 @@ rosservice call /front/odrive/calibrate_motors "{}"
 
 4. Launch the ur5_controller
 
-`roslaunch mbzirc_usrg_challenge2 move_group_interface_tutorial.launch`
+`roslaunch mbzirc_challenge2 move_group_interface_tutorial.launch`
 
 ## To run brick pose estimation
 `roslaunch mbzirc_brick_pose estimate_pose_2d.launch`

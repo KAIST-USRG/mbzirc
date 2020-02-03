@@ -1,0 +1,12 @@
+int64   brick_color_code		# COLOR_CODE : orange=1, blue=2, green=3, red = 4
+bool    container_side			# LEFT = 0, RIGHT = 1
+float64 x				# position x w.r.t. camera axis
+float64 y				# position y
+float64 z				# position z
+float64 qx				# quaternian x
+float64 qy				# quaternian y
+float64 qz				# quaternian z
+float64 qw				# quaternian w
+---
+bool workspace_reachable
+bool success

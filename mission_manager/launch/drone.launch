@@ -1,0 +1,4 @@
+<launch>
+	<node pkg="fcc_serial" name="fcc_serial_node" type="fcc_serial_node"/>
+	<node pkg="fcc_serial" name="client_udp_node" type="client_udp_node"/>
+</launch>

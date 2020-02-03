@@ -1,0 +1,4 @@
+bool waiting_for_data_XY		
+---
+float64 x			# x_distance error in camera frame
+float64 y			# y_distance error in camera frame
