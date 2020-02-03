@@ -1699,13 +1699,14 @@ public:
     #endif
 
     move_group.execute(cartesian_plan);
-
-  void deleteObject()
-  {
-    std::vector<std::string> object_ids;
-    object_ids.push_back(brick.id);
-    planning_scene_interface.removeCollisionObjects(object_ids);
   }
+
+  // void deleteObject()
+  // {
+  //   std::vector<std::string> object_ids;
+  //   object_ids.push_back(brick.id);
+  //   planning_scene_interface.removeCollisionObjects(object_ids);
+  // }
 
 
 };  // end of class definition
