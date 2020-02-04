@@ -1,4 +1,0 @@
-int64 order_of_this_brick       # indicate the height of where to put the brick
-bool brick_container_side       # LEFT = 0, RIGHT = 1
----
-bool success

@@ -1,2 +1,0 @@
-geometry_msgs/Pose box_pose
-uint16 box_color

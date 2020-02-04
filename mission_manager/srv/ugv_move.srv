@@ -1,6 +1,0 @@
-string target_node_name
-geometry_msgs/PoseStamped goal
-float64 move_cmd_weight
-float64 delay_before_start_sec
----
-bool success_or_fail

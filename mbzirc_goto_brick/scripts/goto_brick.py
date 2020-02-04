@@ -3,8 +3,8 @@
 import rospy
 from geometry_msgs.msg import PoseStamped
 from geometry_msgs.msg import Twist
-#TODO: Change service package
-#from beginner_tutorials.srv import AddTwoInts,AddTwoIntsResponse
+#from service_ctl.srv import ugv_move, ugv_moveResponse
+from std_srvs.srv import Trigger, TriggerResponse
 import tf
 
 import math
@@ -13,8 +13,8 @@ class GotoBrick:
     def __init__(self):
         rospy.init_node('goto_brick', anonymous=True)
         
-        self.x_axis_reduce_gain          = rospy.get_param('~x_gain', 0.2)
-        self.y_axis_reduce_gain          = rospy.get_param('~y_gain', 0.2)
+        self.x_axis_reduce_gain          = rospy.get_param('~x_gain', 0.1)
+        self.y_axis_reduce_gain          = rospy.get_param('~y_gain', 0.1)
         self.service_control             = rospy.get_param('~service_control', True)
 
         self.raw_x                       = -1.0
@@ -28,12 +28,16 @@ class GotoBrick:
         self.twist_pub = rospy.Publisher('/cmd_vel', Twist, queue_size=10)
         rospy.Subscriber('/goal_position', PoseStamped, self.pose_callback, queue_size=10)
 
-        #self.start_flag = rospy.Service('add_two_ints', AddTwoInts, self.start_flag)
+        self.start_flag = False
 
-    def handle_add_two_ints(self, service_msg):
-        rospy.loginfo('Service received!')
-        result = self.run()
-        return AddTwoIntsResponse(req.a + req.b)
+        if self.service_control:
+            self.service = rospy.Service('test', Trigger, self.run)
+            rospy.spin()
+    
+    def service_callback(self, req):
+        rospy.loginfo('Service Received')
+        self.start_flag = True
+        return TriggerResponse(True, 'Test')
 
     def pose_callback(self, pose_msg):
         quaternion = (
@@ -50,7 +54,7 @@ class GotoBrick:
 
     def calc_twist(self):
         control_speed = Twist()
-        if 0.0 < self.raw_x < 0.7 and 0.0 < self.raw_y < 0.5:
+        if self.is_arrived():
             control_speed.linear.x = 0.0
             control_speed.linear.y = 0.0
             control_speed.angular.z = 0.0
@@ -75,14 +79,12 @@ class GotoBrick:
 
     def is_arrived(self):
         if 0.0 < self.raw_x < 0.7 and 0.0 < self.raw_y < 0.5:
-            rospy.loginfo('Close!!')
             return True
         else:
             return False
 
-    def run(self):
+    def run(self, req=None):
         r = rospy.Rate(20)
-        is_arrived = False
         seq = 0
         while not rospy.is_shutdown():
             self.calc_twist()
@@ -91,8 +93,10 @@ class GotoBrick:
                 break
             r.sleep()
             seq += 1
-        #return 'success'
+        rospy.loginfo('Brick closed!')
+        return TriggerResponse(True, 'Finish')
 
 if __name__ == "__main__":
     gotoBrick = GotoBrick()
-    gotoBrick.run()
+    if not gotoBrick.service_control:
+        gotoBrick.run()

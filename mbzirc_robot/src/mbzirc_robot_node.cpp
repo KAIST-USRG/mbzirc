@@ -48,6 +48,8 @@ class MBZIRC_ROBOT
         double y_stack = 0;
         double yaw_rate;
         double yaw_estimated = 0;
+        bool rotational_motion;
+        bool low_speed;
         //IMU
         ros::Subscriber imu_sub;
         sensor_msgs::Imu imu_msg;
@@ -68,18 +70,24 @@ class MBZIRC_ROBOT
         double RL_yaw_angle;
         double RR_yaw_angle;
         double angle_direction =  -1.0; // Counter-clock direction : + --> if not, change it to "-1"
-        bool rotational_motion;
+        
         //cmd velocity
         ros::Subscriber cmd_vel_sub;
         double cmd_x_vel;
         double cmd_y_vel;
         double cmd_yaw_rate;
+
+        // Velocity test
+        // double v, v_f, v_r;
+        // double beta;
+        // double yaw_rate_test;
+        // double delta_f, delta_r;
 };
 
 MBZIRC_ROBOT::MBZIRC_ROBOT(ros::NodeHandle& n) 
 {
     // Publisher/s
-    odom_pub = nh.advertise<nav_msgs::Odometry>("/odom", 10);
+    odom_pub = nh.advertise<nav_msgs::Odometry>("/odom", 20);
     imu_sub = nh.subscribe("/gx5/imu/data", 10, &MBZIRC_ROBOT::imu_callback,this);
     //Odrive_Motor_Hub
     wheel_speed_FL_sub = nh.subscribe("/front/odrive/left/raw_odom/velocity", 10, &MBZIRC_ROBOT::wheel_encoder_FL_callback,this);
@@ -101,16 +109,23 @@ MBZIRC_ROBOT::~MBZIRC_ROBOT()
 void MBZIRC_ROBOT::odom_publisher()
 {
     dt = 0.05;
-    double rotaional_cmd_vel_thres = 0.1;
+    double rotaional_cmd_vel_thres = 0.03;
     double x_delta;
     double y_delta;
     // Determine rotational or translational motion
-    if (RR_yaw_angle * RL_yaw_angle < 0 || sqrt(cmd_x_vel*cmd_x_vel + cmd_y_vel*cmd_y_vel) < rotaional_cmd_vel_thres ){ 
+    if (RR_yaw_angle * RL_yaw_angle < 0 && RL_linear_speed * RR_linear_speed < 0 ){ 
         rotational_motion = true; //Rotational motion in the same place
     }
     else{
         rotational_motion = false; //Translational motion
     }
+
+    if (sqrt(cmd_x_vel*cmd_x_vel + cmd_y_vel*cmd_y_vel) < rotaional_cmd_vel_thres){ 
+        low_speed = true; //Low speed
+    }
+    else{
+        low_speed = false; 
+    } 
 
     odom_msg.header.stamp = imu_msg.header.stamp;
     odom_msg.header.frame_id = "odom";
@@ -128,10 +143,32 @@ void MBZIRC_ROBOT::odom_publisher()
     else if(rotational_motion == true){
         x_delta = 0;
         y_delta = 0;
+        odom_msg.twist.twist.linear.x = 0.5 * (RL_linear_speed + RR_linear_speed) * cos(0.5*(RL_yaw_angle + RR_yaw_angle));
+        odom_msg.twist.twist.linear.y = 0.5 * (RL_linear_speed + RR_linear_speed) * sin(0.5*(RL_yaw_angle + RR_yaw_angle));
+        // ROS_INFO("2");
+    }
+    else if(low_speed == true){
+        x_delta = 0;
+        y_delta = 0;
         odom_msg.twist.twist.linear.x = 0;
         odom_msg.twist.twist.linear.y = 0;
         // ROS_INFO("2");
     }
+
+    // v_f = 0.5 * (FL_linear_speed + FR_linear_speed);
+    // v_r = 0.5 * (RL_linear_speed + RR_linear_speed);
+    // delta_f = 0.5 * (FL_yaw_angle + FR_yaw_angle);
+    // delta_r = 0.5 * (RL_yaw_angle + RR_yaw_angle);
+    // double l_f = 1.2;
+    // double l_r = 1.2;
+    // beta = atan2(l_f * tan(delta_f) + l_r * tan(delta_r), l_r + l_f);
+    // v = (v_f * cos(delta_f) + v_r * cos(delta_r)) / (2*cos(beta));
+
+    // yaw_rate_test = v * cos(beta) * (tan(delta_f)+ tan(delta_r)) / (l_f + l_r);
+
+    // ROS_INFO("%f, %f", odom_msg.twist.twist.angular.z, yaw_rate_test);
+
+
     odom_msg.twist.twist.angular.x = imu_msg.angular_velocity.x;
     odom_msg.twist.twist.angular.y = imu_msg.angular_velocity.y;
     odom_msg.twist.twist.angular.z = imu_msg.angular_velocity.z;
@@ -170,7 +207,7 @@ void MBZIRC_ROBOT::imu_callback(const sensor_msgs::Imu::ConstPtr& msg) {
 void MBZIRC_ROBOT::wheel_encoder_FL_callback(const std_msgs::Int32::ConstPtr& msg) {
     int FL_encoder = msg -> data;
     FL_linear_speed = (double)FL_encoder * 2 * M_PI * wheel_radius / 90.0 ;
-    ROS_INFO("Linear Speed: (%f, %f, %f, %f)", FL_linear_speed,FR_linear_speed,RL_linear_speed,RR_linear_speed);
+    // ROS_INFO("Linear Speed: (%f, %f, %f, %f)", FL_linear_speed,FR_linear_speed,RL_linear_speed,RR_linear_speed);
 }
 //Wheel hub: Front Right  
 void MBZIRC_ROBOT::wheel_encoder_FR_callback(const std_msgs::Int32::ConstPtr& msg) {

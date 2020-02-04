@@ -1,5 +1,5 @@
 <launch>
-  <arg name="service_control"      default="false"/>
+  <arg name="service_control"      default="true"/>
   <arg name="x_gain"               default="0.15"/>
   <arg name="y_gain"               default="0.15"/>
 

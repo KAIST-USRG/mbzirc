@@ -2,14 +2,15 @@
 <launch>
   <node pkg="tf2_ros" type="static_transform_publisher" name="ouster_frame_broadcaster" args="-0.6 0 1.4 0 0 0 base_link os1_sensor"/>
   <node pkg="tf2_ros" type="static_transform_publisher" name="gx5_link_broadcaster" args="0 0 0.5 0 0 0 base_link gx5_link"/>
-  <node pkg="tf2_ros" type="static_transform_publisher" name="velodyne_frame_broadcaster" args="0.6 0 0.4 0 0 0 base_link velodyne"/>
+  <!--node pkg="tf2_ros" type="static_transform_publisher" name="velodyne_frame_broadcaster" args="0.6 0 0.4 0 0 0 base_link velodyne"/-->
+  <!--node pkg="tf" type="static_transform_publisher" name="base2gps" args="0.0 0.0 0.0 0.0 0.0 0.0 /base_link /gps 40" /-->
 
   <include file="$(find mbzirc_wheel_control)/launch/microstrain.launch">
-      <arg name="port" value="/dev/ttyACM2" /> <!-- ttyACM0 -->
+      <arg name="port" value="/dev/ttyACM3" /> <!-- ttyACM0 -->
   </include>
   <include file="$(find ublox_gps)/launch/ublox_device.launch"/>
   <include file="$(find mbzirc_wheel_control)/launch/VLP16_points.launch" />
-  <include file="$(find mbzirc_wheel_control)/launch/os1.launch" />
+  <!--include file="$(find mbzirc_wheel_control)/launch/os1.launch" /-->
 
   <include file="$(find mbzirc_wheel_control)/launch/mbzirc_odrive.launch" />
   
