@@ -25,6 +25,9 @@ int main(int argc, char** argv)
 	ROS_RX_TSW_Data_pub = nh.advertise<std_msgs::Int32>("/switch_state", 1);
 	printf("Initiate: publish rostopic </switch_state>\n");   // for debugging
 
+	ROS_RX_MAG_Data_pub = nh.advertise<std_msgs::Int32>("/magnet_state", 1);
+	printf("Initiate: publish rostopic </magnet_state>\n");   // for debugging
+
 // Subscribe Topic
 	ROS_TX_CMD_Data_sub = nh.subscribe("/ROS_CMD_MAG", 1, ROS_CMD_MAG_Data_Callback);
 	printf("Initiate: Subscribe rostopic </ROS_CMD_MAG>\n");   // for debugging
@@ -42,6 +45,7 @@ int main(int argc, char** argv)
 		SerialSend(FdPort1);
 
 		TSW_State_Publish();
+		MAG_State_Publish();
 
 		count_ros++;
 		t_cur = count_ros/ROS_FREQ;
@@ -88,6 +92,12 @@ void TSW_State_Publish(void)
 {
     TSW_Status.data = status_TSW;
     ROS_RX_TSW_Data_pub.publish(TSW_Status);
+}
+
+void MAG_State_Publish(void)
+{
+    MAG_Status.data = status_MAG;
+    ROS_RX_MAG_Data_pub.publish(MAG_Status);
 }
 
 void ROS_CMD_MAG_Data_Callback(const std_msgs::Int32& msg_input)

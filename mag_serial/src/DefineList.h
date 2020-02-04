@@ -14,12 +14,13 @@
 #include <std_msgs/Int8.h>
 #include <std_msgs/Int32.h>
 std_msgs::Int32 TSW_Status;
+std_msgs::Int32 MAG_Status;
 
 // setup the initial name
 using namespace ros;
 using namespace std;
 
-//#define DEBUG_MODE
+#define DEBUG_MODE
 //#define DEBUG_MODE_Agent_List
 #define ROS_FREQ  5.0    // while loop frequency [Hz]
 
@@ -40,6 +41,7 @@ int   status_TSW = -1;
 
 // ROS topic define
 ros::Publisher ROS_RX_TSW_Data_pub;
+ros::Publisher ROS_RX_MAG_Data_pub;
 ros::Subscriber ROS_TX_CMD_Data_sub;
 
 float satmax(float, float);
@@ -53,6 +55,7 @@ void* receive_p_thread(void *fd);
 
 void  UpdateCommand(void);
 void  TSW_State_Publish(void);
+void  MAG_State_Publish(void);
 void  ROS_CMD_MAG_Data_Callback(const std_msgs::Int32& msg_input);
 
 #pragma pack(1)

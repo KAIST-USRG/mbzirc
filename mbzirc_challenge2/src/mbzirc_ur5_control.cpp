@@ -927,12 +927,12 @@ public:
     *   if either of the switch is touched => publish 0 => the robot arm's motion should stop
     */
 
-    if (msg->data == 0 && FLAG_SWITCH_TOUCHED == false)
+    if (msg->data == 1 && FLAG_SWITCH_TOUCHED == false)
     { // The active motion plan should stop when the switch is triggered
       FLAG_SWITCH_TOUCHED = true;
       move_group.stop();
     }
-    else if (msg->data == 1)
+    else if (msg->data == 0)
     {
       FLAG_SWITCH_TOUCHED = false;  // switch is deactivated
 

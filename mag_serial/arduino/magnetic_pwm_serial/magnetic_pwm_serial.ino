@@ -51,10 +51,15 @@ void loop() {
   //
   // Read Tactile Switches & Control LEDs
   //
-  status_TSW_1 = digitalRead(2);  // switch LOW => touch, switch HIGH => untouched
+  status_TSW_1 = digitalRead(2); 
   status_TSW_2 = digitalRead(3);
   
-  status_TSW = status_TSW_1 && status_TSW_2;  // either switch is touched
+  status_TSW = status_TSW_1 || status_TSW_2;  // 
+  if (status_TSW == 1){
+    digitalWrite(13, HIGH);      // turn LED ON
+  }else{
+    digitalWrite(13, LOW);      // turn LED ON
+  }
   
   
   
@@ -71,16 +76,6 @@ void loop() {
   //
   // Magnet Control & Control LEDs
   //
-
-  // for test
-//  if (cur_time < 10000) {
-//    cur_FlagA = 1;
-//  }
-//  else {
-//    cur_FlagA = 0;
-//  }
-//
-//  cur_FlagA = 0;
   
   if(cur_FlagA != prev_FlagA) {
     time_MAG = millis();
@@ -110,9 +105,6 @@ void loop() {
       status_MAG_RIGHT = 1;
     }
   }
-
-  Toggle_OnOff_LED(4, status_MAG_LEFT);
-  Toggle_OnOff_LED(5, status_MAG_RIGHT);
 
   status_MAG = status_MAG_LEFT && status_MAG_RIGHT;
   
