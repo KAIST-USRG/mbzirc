@@ -17,6 +17,7 @@ int cur_time = 0;
 int prev_time = 0;
 
 bool current_status;
+bool once = false;
 
 // switch
 int ledPin = 13;                // choose the pin for the LED
@@ -31,11 +32,13 @@ ros::Publisher switch_state_pub("switch_state", &switch_state_msg); // switch
 void messageCb( const std_msgs::Bool& magnet_on_msg) {
   if (magnet_on_msg.data) {
     cur_flag = 1;
+    once = false;
   }
   
   else if (!magnet_on_msg.data)
   {
     cur_flag = 0;
+    once = false;
   }
   
 }
@@ -91,7 +94,41 @@ void loop() {
       myservo_r.write(180);    
     }
   }
-  
+//  if (once == false)
+//  {
+//      for(int i = 0; i < 5; i++)       // Let us know the setup is completed
+//    {  
+//      digitalWrite(ledPin, HIGH);
+//      delay(200);
+//      digitalWrite(ledPin, LOW);
+//      delay(200);
+//    }
+//    if (cur_flag == 0)
+//    {
+//      myservo_l.write(90);
+//      myservo_r.write(90);
+//      delay(200);
+//      myservo_l.write(5);
+//      myservo_r.write(5);
+//      delay(200);
+//      myservo_l.write(90);
+//      myservo_r.write(90);
+//      delay(200);
+//      once = true;
+//    }else if (cur_flag == 1)
+//    {
+//      myservo_l.write(90);
+//      myservo_r.write(90);
+//      delay(200);
+//      myservo_l.write(175);
+//      myservo_r.write(175);
+//      delay(200);
+//      myservo_l.write(90);
+//      myservo_r.write(90);
+//      delay(200);
+//      once = true;
+//    }
+//  }
   
   // switch
   int read_input_s1 = digitalRead(inputPin_s1);  // read input value

@@ -114,10 +114,11 @@ private:
   moveit_msgs::CollisionObject brick; // Define a collision object ROS message.
 
   // for Cartesian Path
-  const double jump_threshold = 0.0; // read only.
+  const double jump_threshold = 0.0;       // read only.
   const double eef_step       = 0.01;      // read only.
   const double PI             = 3.141592653589793;
   double       fraction       = 0.0;
+
 
   // Publisher
 
@@ -284,47 +285,47 @@ public:
     }
     
 
-    // ROS_INFO("============== SERVICE CLIENT to Camera node: Visual Servo XY ==============");
-    // {
-    //   visual_servo_XY_srv.request.waiting_for_data_XY = true;
-    //   if(visual_servo_XY_sc.call(visual_servo_XY_srv))
-    //   {
-    //     std::cout << "visual_servo_XY_sc: Response : " << visual_servo_XY_srv.response.x << std::endl;
-    //     std::cout << "visual_servo_XY_sc: Response : " << visual_servo_XY_srv.response.y << std::endl;
-    //     float MAX_DIST = 0.20;
-    //     bool reachable = moveXYZSlowly(visual_servo_XY_srv.response.x * MAX_DIST, 
-    //                                    visual_servo_XY_srv.response.y  * MAX_DIST, 
-    //                                    0, 0.02, 0.02);
+    ROS_INFO("============== SERVICE CLIENT to Camera node: Visual Servo XY ==============");
+    {
+      visual_servo_XY_srv.request.waiting_for_data_XY = true;
+      if(visual_servo_XY_sc.call(visual_servo_XY_srv))
+      {
+        std::cout << "visual_servo_XY_sc: Response : " << visual_servo_XY_srv.response.x << std::endl;
+        std::cout << "visual_servo_XY_sc: Response : " << visual_servo_XY_srv.response.y << std::endl;
+        float MAX_DIST = 0.18;
+        bool reachable = moveXYZSlowly(visual_servo_XY_srv.response.x * MAX_DIST, 
+                                       visual_servo_XY_srv.response.y * MAX_DIST, 
+                                       0, 0.05, 0.05);
 
-    //     if (reachable != true)  // arm cannot reach, tell the mission manager
-    //     {
-    //       res.workspace_reachable = false;
-    //       if (req.target_brick_container_side_left_right == LEFT){
-    //         moveToDefault(LEFT);
-    //       }else
-    //       {
-    //         moveToDefault(RIGHT);
-    //       }
-    //       return true;
-    //     }
-    //   }else 
-    //   {  // fail to request service
-    //     std::cout << "visual_servo_XY_sc: Failed to call service" << std::endl;
-    //     return false;
-    //   }
-    // }
+        if (reachable != true)  // arm cannot reach, tell the mission manager
+        {
+          res.workspace_reachable = false;
+          if (req.target_brick_container_side_left_right == LEFT){
+            moveToDefault(LEFT);
+          }else
+          {
+            moveToDefault(RIGHT);
+          }
+          return true;
+        }
+      }else 
+      {  // fail to request service
+        std::cout << "visual_servo_XY_sc: Failed to call service" << std::endl;
+        return false;
+      }
+    }
 
     
     ROS_INFO("================== Visual Servo yaw  ==================");
     {
-      moveYawSlowly(LEFT, 0.02, 0.02);
+      moveYawSlowly(LEFT, 0.05, 0.05);
       if(FLAG_YAW_INCORRECT == true)
       {
         resetYaw();
-        moveYawSlowly(RIGHT, 0.02, 0.02);
-        finish_stop_yaw_msg.data = true;
-        finish_stop_yaw_pub.publish(finish_stop_yaw_msg);
+        moveYawSlowly(RIGHT, 0.05, 0.05);
       }
+      // finish_stop_yaw_msg.data = true;
+      // finish_stop_yaw_pub.publish(finish_stop_yaw_msg);
       // visual_servo_yaw_srv.request.waiting_for_data_yaw = true;
       // if(visual_servo_yaw_sc.call(visual_servo_yaw_srv))
       // {
@@ -432,57 +433,59 @@ public:
     current_state->copyJointGroupPositions(joint_model_group, joint_group_positions);
 
     //  ====================== align end-effector to have to same yaw angle as brick  ====================== //
-    {
-      // convert quaternion to roll, pitch, yaw
+    // {
+    //   // convert quaternion to roll, pitch, yaw
 
-      tf::Quaternion q_temp{
-          // Note that norm of this Quaternion needs to be ONE
-          // Otherwise, it's inaccurate.
-          req.qx,
-          req.qy,
-          req.qz,
-          req.qw
-      };
+    //   tf::Quaternion q_temp{
+    //       // Note that norm of this Quaternion needs to be ONE
+    //       // Otherwise, it's inaccurate.
+    //       req.qx,
+    //       req.qy,
+    //       req.qz,
+    //       req.qw
+    //   };
 
-      tf::Matrix3x3 m(q_temp);
-      double roll, pitch, yaw;
-      m.getRPY(roll, pitch, yaw);
+    //   tf::Matrix3x3 m(q_temp);
+    //   double roll, pitch, yaw;
+    //   m.getRPY(roll, pitch, yaw);
 
-      if (yaw < 0)
-        yaw += PI;
-      if (yaw > PI/2)
-        yaw = -(PI-yaw);
+    //   if (yaw < 0)
+    //     yaw += PI;
+    //   if (yaw > PI/2)
+    //     yaw = -(PI-yaw);
 
-      ROS_INFO("Roll = %f, Pitch = %f, Yaw = %f", roll*180./PI, pitch*180./PI, yaw*180./PI);
+    //   ROS_INFO("Roll = %f, Pitch = %f, Yaw = %f", roll*180./PI, pitch*180./PI, yaw*180./PI);
 
-      joint_group_positions[5] += yaw;  // radians
-      move_group.setJointValueTarget(joint_group_positions);
-      move_group.setPlanningTime(PLANNING_TIMEOUT);
-      move_group.setGoalJointTolerance(0.01);
+    //   joint_group_positions[5] += yaw;  // radians
+    //   move_group.setJointValueTarget(joint_group_positions);
+    //   move_group.setPlanningTime(PLANNING_TIMEOUT);
+    //   move_group.setGoalJointTolerance(0.01);
 
-      bool success{move_group.plan(my_plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS};
-      ROS_INFO_NAMED("tutorial", "Align Yaw angle %s", success ? "" : "FAILED");
+    //   bool success{move_group.plan(my_plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS};
+    //   ROS_INFO_NAMED("tutorial", "Align Yaw angle %s", success ? "" : "FAILED");
 
-      if(!success)  // Don't proceed if cannot reach the position
-      {
-        res.workspace_reachable = false;
-        res.success = false;
-        return true;
-      }
+    //   if(!success)  // Don't proceed if cannot reach the position
+    //   {
+    //     res.workspace_reachable = false;
+    //     res.success = false;
+    //     return true;
+    //   }
         
-      // Visualize the plan in RViz
-      visual_tools.deleteAllMarkers();
-      visual_tools.publishText(text_pose, "Joint Space Goal", rvt::WHITE, rvt::XLARGE);
-      visual_tools.publishTrajectoryLine(my_plan.trajectory_, joint_model_group);
-      visual_tools.trigger();
+    //   // Visualize the plan in RViz
+    //   visual_tools.deleteAllMarkers();
+    //   visual_tools.publishText(text_pose, "Joint Space Goal", rvt::WHITE, rvt::XLARGE);
+    //   visual_tools.publishTrajectoryLine(my_plan.trajectory_, joint_model_group);
+    //   visual_tools.trigger();
 
 
-      ROS_INFO("yaw = %f", yaw*180./PI);
-      #ifdef DEBUG
-          visual_tools.prompt("Press 'next' to front position"); // DEBUG remove if not NEEDED
-      #endif
-      move_group.move(); //move to storage on left side
-    }
+    //   ROS_INFO("yaw = %f", yaw*180./PI);
+    //   #ifdef DEBUG
+    //       visual_tools.prompt("Press 'next' to front position"); // DEBUG remove if not NEEDED
+    //   #endif
+    //   move_group.move(); //move to storage on left side
+    // }
+
+
     //  ====================== Move close to the brick  ====================== //
     {
       // moving +toX => +X in UGV frame
@@ -544,6 +547,7 @@ public:
       move_group.execute(cartesian_plan);
     }
     
+
     //  ====================== Slowly moving the end-effector down, till it triggered  ====================== //
     while (true)
     {
@@ -556,7 +560,6 @@ public:
       }
     }
 
-    
     FLAG_READ_CAM_DATA = false; // Disable reading box pose data stream
     gb_count_move = 0;
 
