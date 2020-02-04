@@ -4,7 +4,7 @@ import rospy
 from geometry_msgs.msg import PoseStamped
 from geometry_msgs.msg import Twist
 #TODO: Change service package
-from beginner_tutorials.srv import AddTwoInts,AddTwoIntsResponse
+#from beginner_tutorials.srv import AddTwoInts,AddTwoIntsResponse
 import tf
 
 import math
@@ -50,7 +50,11 @@ class GotoBrick:
 
     def calc_twist(self):
         control_speed = Twist()
-        if self.raw_x < 0.0 and self.raw_y < 0.0:
+        if 0.0 < self.raw_x < 0.7 and 0.0 < self.raw_y < 0.5:
+            control_speed.linear.x = 0.0
+            control_speed.linear.y = 0.0
+            control_speed.angular.z = 0.0
+        elif self.raw_x < 0.0 and self.raw_y < 0.0:
             #point turn
             control_speed.linear.x = 0.0
             control_speed.linear.y = 0.0
@@ -70,7 +74,8 @@ class GotoBrick:
         pass
 
     def is_arrived(self):
-        if 0.0 < self.raw_x < 0.5 and 0.0 < self.raw_y < 0.5:
+        if 0.0 < self.raw_x < 0.7 and 0.0 < self.raw_y < 0.5:
+            rospy.loginfo('Close!!')
             return True
         else:
             return False
@@ -80,10 +85,10 @@ class GotoBrick:
         is_arrived = False
         seq = 0
         while not rospy.is_shutdown():
-            if self.is_arrived():
-                break
             self.calc_twist()
             self.publish_twist()
+            if self.is_arrived():
+                break
             r.sleep()
             seq += 1
         #return 'success'

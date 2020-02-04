@@ -1,7 +1,7 @@
 <launch>
   <arg name="service_control"      default="false"/>
-  <arg name="x_gain"               default="0.2"/>
-  <arg name="y_gain"               default="0.2"/>
+  <arg name="x_gain"               default="0.15"/>
+  <arg name="y_gain"               default="0.15"/>
 
   <node name="goto_brick" pkg="mbzirc_goto_brick" type="goto_brick.py" output="screen">
     <param name="service_control"  value="$(arg service_control)"/>
