@@ -42,6 +42,7 @@
 // msg
 #include <std_msgs/Bool.h>
 #include <std_msgs/Int16.h>
+#include <std_msgs/Int32.h>
 #include <std_msgs/Float32.h>
 #include <geometry_msgs/Pose.h>
 
@@ -134,7 +135,6 @@ private:
 
   // Subscriber
   
-  ros::Subscriber magnet_state_sub;
   ros::Subscriber manual_moveXVZ_sub;
   ros::Subscriber moveToDefault_flag_sub;
   ros::Subscriber moveToStorageSide_flag_sub;
@@ -153,7 +153,6 @@ private:
   // msg
   std_msgs::Bool finish_stop_xy_msg;
   std_msgs::Bool finish_stop_yaw_msg;
-  std_msgs::Bool magnet_state_msg;
   std_msgs::Bool moveToDefault_finished_flag_msg;
   std_msgs::Bool moveToDefault_flag_msg;
   std_msgs::Bool moveToStorageSide_finished_flag_msg;
@@ -161,6 +160,7 @@ private:
   std_msgs::Bool readCamData_flag_msg;
 
   std_msgs::Int16 box_count_msg;
+  std_msgs::Int32 magnet_state_msg;
 
   geometry_msgs::Pose target_pose;
   geometry_msgs::Pose avg_pose_msg; // absolute position w.r.t UR5 base
@@ -225,7 +225,7 @@ public:
     box_count_pub = nh.advertise<std_msgs::Int16>("/box_count", 10);
     finish_stop_xy_pub = nh.advertise<std_msgs::Bool>("/finish_stop_xy", 10);
     finish_stop_yaw_pub = nh.advertise<std_msgs::Bool>("/finish_stop_yaw", 10);
-    magnet_state_pub = nh.advertise<std_msgs::Bool>("/magnet_on", 10);
+    magnet_state_pub = nh.advertise<std_msgs::Int32>("/ROS_CMD_MAG", 10);
     moveToStorageSide_finished_flag_pub = nh.advertise<std_msgs::Bool>("/moveToStorageSide_finish_flag", 10);
     moveToDefault_finished_flag_pub = nh.advertise<std_msgs::Bool>("/moveToDefault_finish_flag", 10);
     readCamData_flag_pub = nh.advertise<std_msgs::Bool>("/readCamData_Flag", 10);
@@ -259,7 +259,7 @@ public:
 
     ros::Duration(1).sleep();
     // Turn on Magnet
-    magnet_state_msg.data = true;
+    magnet_state_msg.data = 1;
     magnet_state_pub.publish(magnet_state_msg);
     ROS_INFO("Initialize: MAGNET_ON");
 
@@ -565,7 +565,7 @@ public:
 
     //  ====================== Open magnet to make it stronger  ====================== //
     {
-      magnet_state_msg.data = true;
+      magnet_state_msg.data = 1;
       magnet_state_pub.publish(magnet_state_msg); // MAGNET ON
       ROS_INFO("_goToBrickServiceCallback: MAGNET_ON");
       ros::Duration(2.0).sleep();
@@ -726,7 +726,7 @@ public:
 
     //  ====================== turn off the magnet to detach the brick  ====================== //
     {
-      magnet_state_msg.data = false;
+      magnet_state_msg.data = 0;
       magnet_state_pub.publish(magnet_state_msg); // MAGNET OFF
       ROS_INFO("_placeInContainerServiceCallback: MAGNET_OFF");
       detachBrick();
@@ -746,7 +746,7 @@ public:
 
     //  ====================== turn the magnet on again  ====================== //
     {
-      magnet_state_msg.data = true;
+      magnet_state_msg.data = 1;
       magnet_state_pub.publish(magnet_state_msg); // MAGNET OFF
       ROS_INFO("_placeInContainerServiceCallback: MAGNET_ON");
       deleteObject();
@@ -921,18 +921,18 @@ public:
   }
 
 
-  void switchStateCallback(const std_msgs::Bool::ConstPtr& msg)
+  void switchStateCallback(const std_msgs::Int32::ConstPtr& msg)
   {
-    /*  The Switch will always publish false if it's not touched, 
-    *   true if it's touched => the robot arm's motion should stop
+    /*  switch always publish 1 if untouched
+    *   if either of the switch is touched => publish 0 => the robot arm's motion should stop
     */
 
-    if (msg->data == true && FLAG_SWITCH_TOUCHED == false)
+    if (msg->data == 0 && FLAG_SWITCH_TOUCHED == false)
     { // The active motion plan should stop when the switch is triggered
       FLAG_SWITCH_TOUCHED = true;
       move_group.stop();
     }
-    else if (msg->data == false)
+    else if (msg->data == 1)
     {
       FLAG_SWITCH_TOUCHED = false;  // switch is deactivated
 

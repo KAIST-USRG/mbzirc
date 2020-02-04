@@ -19,10 +19,13 @@
   <node name="mbzirc_ur5_control" pkg="mbzirc_challenge2" type="mbzirc_ur5_control" respawn="false" output="screen">
   </node>
 
-  <!-- Initialize Arduino: Switch -->
+  <!-- Initialize Serial node (Arduino Control)-->
+  <node name="mag_serial_node" pkg="mag_serial" type="mag_serial_node" respawn="false" output="screen"/>
+
+  <!-- Initialize Arduino: Switch
   <node name="serial_node_switch" pkg="rosserial_python" type="serial_node.py" respawn="false" output="screen">
     <param name="port" value="/dev/ttyACM1"/>
     <param name="baud" value="9600"/>
-  </node>
+  </node> -->
 
  </launch>
