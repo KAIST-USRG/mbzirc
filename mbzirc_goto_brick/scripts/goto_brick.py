@@ -33,7 +33,7 @@ class GotoBrick:
 
         if self.service_control:
             #self.service = rospy.Service('test', Trigger, self.run)
-            self.service = rospy.Service('goto_msg', ugv_move, self.run)
+            self.service = rospy.Service('ugv_move_local', ugv_move, self.run)
             rospy.spin()
     
     def service_callback(self, req):
