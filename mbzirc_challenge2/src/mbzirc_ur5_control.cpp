@@ -45,6 +45,7 @@
 #include <std_msgs/Int32.h>
 #include <std_msgs/Float32.h>
 #include <geometry_msgs/Pose.h>
+#include <sensor_msgs/Range.h>
 
 #include <tf/transform_broadcaster.h>
 
@@ -83,6 +84,7 @@ bool FLAG_SWITCH_TOUCHED  = false;
 bool FLAG_SWITCH_RESET    = true;
 bool FLAG_MAGNET_ON       = true;      // Is the magnet on?
 bool FLAG_YAW_INCORRECT   = false;
+bool FLAG_XY_STOP         = false;
 
 
 int   gb_count_pose_msg   = 0;
@@ -124,7 +126,6 @@ private:
   // Publisher
 
   ros::Publisher avg_pose_pub;
-  ros::Publisher box_count_pub;
   ros::Publisher finish_stop_xy_pub;
   ros::Publisher finish_stop_yaw_pub;
   ros::Publisher magnet_state_pub;  
@@ -134,7 +135,6 @@ private:
   
 
   // Subscriber
-  
   ros::Subscriber manual_moveXVZ_sub;
   ros::Subscriber moveToDefault_flag_sub;
   ros::Subscriber moveToStorageSide_flag_sub;
@@ -145,7 +145,6 @@ private:
   ros::Subscriber plate_yaw_move_sub;
   ros::Subscriber pose_from_cam_sub;
   ros::Subscriber readCamData_flag_sub;
-  ros::Subscriber sensor_range_sub;
   ros::Subscriber servo_stop_sub;
   ros::Subscriber switch_state_sub;
 
@@ -153,6 +152,7 @@ private:
   // msg
   std_msgs::Bool finish_stop_xy_msg;
   std_msgs::Bool finish_stop_yaw_msg;
+  std_msgs::Bool magnet_state_msg;
   std_msgs::Bool moveToDefault_finished_flag_msg;
   std_msgs::Bool moveToDefault_flag_msg;
   std_msgs::Bool moveToStorageSide_finished_flag_msg;
@@ -160,10 +160,10 @@ private:
   std_msgs::Bool readCamData_flag_msg;
 
   std_msgs::Int16 box_count_msg;
-  std_msgs::Int32 magnet_state_msg;
-
+  
   geometry_msgs::Pose target_pose;
   geometry_msgs::Pose avg_pose_msg; // absolute position w.r.t UR5 base
+  geometry_msgs::Point avg_Z_msg;
 
   // ServiceClient
   ros::ServiceClient go_to_brick_sc;
@@ -222,10 +222,9 @@ public:
     // ========================  Node Communications
     // Publisher
     avg_pose_pub  = nh.advertise<geometry_msgs::Pose>("/avg_pose", 10);
-    box_count_pub = nh.advertise<std_msgs::Int16>("/box_count", 10);
     finish_stop_xy_pub = nh.advertise<std_msgs::Bool>("/finish_stop_xy", 10);
     finish_stop_yaw_pub = nh.advertise<std_msgs::Bool>("/finish_stop_yaw", 10);
-    magnet_state_pub = nh.advertise<std_msgs::Int32>("/ROS_CMD_MAG", 10);
+    magnet_state_pub = nh.advertise<std_msgs::Bool>("/magnet_on", 10);
     moveToStorageSide_finished_flag_pub = nh.advertise<std_msgs::Bool>("/moveToStorageSide_finish_flag", 10);
     moveToDefault_finished_flag_pub = nh.advertise<std_msgs::Bool>("/moveToDefault_finish_flag", 10);
     readCamData_flag_pub = nh.advertise<std_msgs::Bool>("/readCamData_Flag", 10);
@@ -236,12 +235,12 @@ public:
     manual_moveXVZ_sub = nh.subscribe("/manual_moveXVZ", 10, &Arm::manual_moveXYZ, this);
     moveToDefault_flag_sub = nh.subscribe("/moveToDefault_flag", 10, &Arm::moveToDafaultFlagCallback, this);
     // plate_xy_offset_sub = nh.subscribe("/plate_xy_offset", 1, &Arm::plateXYOffsetCallback, this);
-    plate_yaw_incorrect_sub = nh.subscribe("/plate_yaw_incorrect", 1, &Arm::plateYawIncorrectCallback, this);
+    plate_yaw_incorrect_sub = nh.subscribe("/ur5_rotation_incorrect", 1, &Arm::plateYawIncorrectCallback, this);
     // plate_yaw_move_sub = nh.subscribe("/plate_yaw_move", 1, &Arm::plateYawMoveCallback, this);
-    pose_from_cam_sub = nh.subscribe("/brick_pose", 10, &Arm::calcAvgCallback, this);
+    pose_from_cam_sub = nh.subscribe("/teraranger_evo", 10, &Arm::calcAvgCallback_Z, this);
     // moveXYZ_sub = nh.subscribe("avg_pose", 10, &Arm::_moveXYZCallback, this);
     readCamData_flag_sub = nh.subscribe("/readCamData_Flag", 100, &Arm::readCamDataFlagCallback, this);
-    servo_stop_sub = nh.subscribe("/stop", 1, &Arm::servoStopCallback, this);
+    servo_stop_sub = nh.subscribe("/ur5_stop", 1, &Arm::servoStopCallback, this);
     switch_state_sub = nh.subscribe("/switch_state", 1, &Arm::switchStateCallback, this);
     
 
@@ -259,7 +258,7 @@ public:
 
     ros::Duration(1).sleep();
     // Turn on Magnet
-    magnet_state_msg.data = 1;
+    magnet_state_msg.data = true;
     magnet_state_pub.publish(magnet_state_msg);
     ROS_INFO("Initialize: MAGNET_ON");
 
@@ -292,22 +291,11 @@ public:
       {
         std::cout << "visual_servo_XY_sc: Response : " << visual_servo_XY_srv.response.x << std::endl;
         std::cout << "visual_servo_XY_sc: Response : " << visual_servo_XY_srv.response.y << std::endl;
-        float MAX_DIST = 0.18;
-        bool reachable = moveXYZSlowly(visual_servo_XY_srv.response.x * MAX_DIST, 
+        float MAX_DIST = 1;
+        bool xy_success = moveXYZSlowly(visual_servo_XY_srv.response.x * MAX_DIST, 
                                        visual_servo_XY_srv.response.y * MAX_DIST, 
                                        0, 0.05, 0.05);
 
-        if (reachable != true)  // arm cannot reach, tell the mission manager
-        {
-          res.workspace_reachable = false;
-          if (req.target_brick_container_side_left_right == LEFT){
-            moveToDefault(LEFT);
-          }else
-          {
-            moveToDefault(RIGHT);
-          }
-          return true;
-        }
       }else 
       {  // fail to request service
         std::cout << "visual_servo_XY_sc: Failed to call service" << std::endl;
@@ -318,34 +306,26 @@ public:
     
     ROS_INFO("================== Visual Servo yaw  ==================");
     {
-      moveYawSlowly(LEFT, 0.05, 0.05);
-      if(FLAG_YAW_INCORRECT == true)
+      if (FLAG_XY_STOP == true) 
       {
-        resetYaw();
-        moveYawSlowly(RIGHT, 0.05, 0.05);
+        // The arm can reach the brick, then proceed to correct the yaw angle
+        moveYawSlowly(LEFT, 0.05, 0.05);
+        if(FLAG_YAW_INCORRECT == true)
+        {
+          resetYaw();
+          moveYawSlowly(RIGHT, 0.05, 0.05);
+        }
+      }else{
+        // The arm cannot reach the brick
+        res.workspace_reachable = false;
+        res.success_or_fail = false;
+        return true;
+        
       }
-      // finish_stop_yaw_msg.data = true;
-      // finish_stop_yaw_pub.publish(finish_stop_yaw_msg);
-      // visual_servo_yaw_srv.request.waiting_for_data_yaw = true;
-      // if(visual_servo_yaw_sc.call(visual_servo_yaw_srv))
-      // {
-      //   std::cout << "visual_servo_yaw_sc: Response : " << visual_servo_yaw_srv.response.yaw << std::endl;
-      //   moveYawSlowly(LEFT, 0.02, 0.02);
-      //   if(FLAG_YAW_INCORRECT == true)
-      //   {
-      //     resetYaw();
-      //     moveYawSlowly(RIGHT, 0.02, 0.02);
-      //     finish_stop_yaw_msg.data = true;
-      //     finish_stop_yaw_pub.publish(finish_stop_yaw_msg);
-      //   }
-      // }else 
-      // {  // fail to request service
-      //   std::cout << "visual_servo_yaw_sc: Failed to call service" << std::endl;
-      //   return false;
-      // }
+       
     }
     ROS_INFO("====================== at default position ======================");
-    // std_msgs::BoolConstPtr test_msg = ros::topic::waitForMessage<std_msgs::Bool>("/moveToDefault_finish_flag");
+
 
     ROS_INFO("====================== Trigger to read data from camera ======================");
     {
@@ -411,6 +391,7 @@ public:
     
       return true;
     }
+    return true;
   }
 
   // ==================== Internal Service Callback Function ==================== //
@@ -432,60 +413,6 @@ public:
     std::vector<double> joint_group_positions;
     current_state->copyJointGroupPositions(joint_model_group, joint_group_positions);
 
-    //  ====================== align end-effector to have to same yaw angle as brick  ====================== //
-    // {
-    //   // convert quaternion to roll, pitch, yaw
-
-    //   tf::Quaternion q_temp{
-    //       // Note that norm of this Quaternion needs to be ONE
-    //       // Otherwise, it's inaccurate.
-    //       req.qx,
-    //       req.qy,
-    //       req.qz,
-    //       req.qw
-    //   };
-
-    //   tf::Matrix3x3 m(q_temp);
-    //   double roll, pitch, yaw;
-    //   m.getRPY(roll, pitch, yaw);
-
-    //   if (yaw < 0)
-    //     yaw += PI;
-    //   if (yaw > PI/2)
-    //     yaw = -(PI-yaw);
-
-    //   ROS_INFO("Roll = %f, Pitch = %f, Yaw = %f", roll*180./PI, pitch*180./PI, yaw*180./PI);
-
-    //   joint_group_positions[5] += yaw;  // radians
-    //   move_group.setJointValueTarget(joint_group_positions);
-    //   move_group.setPlanningTime(PLANNING_TIMEOUT);
-    //   move_group.setGoalJointTolerance(0.01);
-
-    //   bool success{move_group.plan(my_plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS};
-    //   ROS_INFO_NAMED("tutorial", "Align Yaw angle %s", success ? "" : "FAILED");
-
-    //   if(!success)  // Don't proceed if cannot reach the position
-    //   {
-    //     res.workspace_reachable = false;
-    //     res.success = false;
-    //     return true;
-    //   }
-        
-    //   // Visualize the plan in RViz
-    //   visual_tools.deleteAllMarkers();
-    //   visual_tools.publishText(text_pose, "Joint Space Goal", rvt::WHITE, rvt::XLARGE);
-    //   visual_tools.publishTrajectoryLine(my_plan.trajectory_, joint_model_group);
-    //   visual_tools.trigger();
-
-
-    //   ROS_INFO("yaw = %f", yaw*180./PI);
-    //   #ifdef DEBUG
-    //       visual_tools.prompt("Press 'next' to front position"); // DEBUG remove if not NEEDED
-    //   #endif
-    //   move_group.move(); //move to storage on left side
-    // }
-
-
     //  ====================== Move close to the brick  ====================== //
     {
       // moving +toX => +X in UGV frame
@@ -498,14 +425,10 @@ public:
       target_pose = move_group.getCurrentPose().pose;
 
       // first way point
-      target_pose.position.x = target_pose.position.x + (req.x / 2);
-      target_pose.position.y = target_pose.position.y - (req.y / 2);
       target_pose.position.z = target_pose.position.z - (req.z / 2);
       waypoints_down.push_back(target_pose);
 
       // second waypoint (target)
-      target_pose.position.x = target_pose.position.x + (req.x / 2);
-      target_pose.position.y = target_pose.position.y - (req.y / 2) + DIST_CAM_TO_EE;
       target_pose.position.z = target_pose.position.z - (req.z / 2) + DIST_LIDAR_TO_MAGNET + Z_OFFSET;
       waypoints_down.push_back(target_pose);
 
@@ -565,7 +488,7 @@ public:
 
     //  ====================== Open magnet to make it stronger  ====================== //
     {
-      magnet_state_msg.data = 1;
+      magnet_state_msg.data = true;
       magnet_state_pub.publish(magnet_state_msg); // MAGNET ON
       ROS_INFO("_goToBrickServiceCallback: MAGNET_ON");
       ros::Duration(2.0).sleep();
@@ -726,8 +649,9 @@ public:
 
     //  ====================== turn off the magnet to detach the brick  ====================== //
     {
-      magnet_state_msg.data = 0;
+      magnet_state_msg.data = false;
       magnet_state_pub.publish(magnet_state_msg); // MAGNET OFF
+      ros::Duration(3).sleep();
       ROS_INFO("_placeInContainerServiceCallback: MAGNET_OFF");
       detachBrick();
     }
@@ -746,7 +670,7 @@ public:
 
     //  ====================== turn the magnet on again  ====================== //
     {
-      magnet_state_msg.data = 1;
+      magnet_state_msg.data = true;
       magnet_state_pub.publish(magnet_state_msg); // MAGNET OFF
       ROS_INFO("_placeInContainerServiceCallback: MAGNET_ON");
       deleteObject();
@@ -824,6 +748,80 @@ public:
 
     }
   }
+
+
+void calcAvgCallback_Z(const sensor_msgs::Range::ConstPtr& msg)
+  {
+    /*  Read the brick pose from the camera
+    *   publish the processed data
+    *   The data is expressed in Camera Frame
+    */
+    if (FLAG_READ_CAM_DATA == true){
+      if (gb_count_pose_msg < NUM_SUM + NUM_DISCARD){
+
+        if (gb_count_pose_msg <= NUM_DISCARD){  // discard the initial steam data => garbage data
+          gb_x_sum = 0;
+          gb_y_sum = 0;
+          gb_z_sum = 0;
+          gb_xq_sum = 0;
+          gb_yq_sum = 0;
+          gb_zq_sum = 0;
+          gb_wq_sum = 0;
+        }
+
+        ROS_INFO("calcAvgCallback: Accumulate the data");
+        // gb_x_sum += msg->position.x;
+        // gb_y_sum += msg->position.y;
+        gb_z_sum += msg->range;
+        // gb_xq_sum += msg->orientation.x;
+        // gb_yq_sum += msg->orientation.y;
+        // gb_zq_sum += msg->orientation.z;
+        // gb_wq_sum += msg->orientation.w;
+
+        gb_count_pose_msg += 1;
+
+      }else{ // picking up should start from DEFAULT position
+        int n = NUM_SUM;
+
+        avg_pose_msg.position.x = gb_x_sum/n;
+        avg_pose_msg.position.y = gb_y_sum/n;
+        avg_pose_msg.position.z = gb_z_sum/n;
+        avg_pose_msg.orientation.x = gb_xq_sum/n;
+        avg_pose_msg.orientation.y = gb_yq_sum/n;
+        avg_pose_msg.orientation.z = gb_zq_sum/n;
+        avg_pose_msg.orientation.w = gb_wq_sum/n;
+        ROS_INFO("calcAvgCallback: x = %lf, y = %lf, z = %lf", avg_pose_msg.position.x, avg_pose_msg.position.y, avg_pose_msg.position.z);
+
+        avg_pose_pub.publish(avg_pose_msg);
+
+        FLAG_READ_CAM_DATA = false;
+
+        gb_x_sum = 0;
+        gb_y_sum = 0;
+        gb_z_sum = 0;
+        gb_xq_sum = 0;
+        gb_yq_sum = 0;
+        gb_zq_sum = 0;
+        gb_wq_sum = 0;
+
+        gb_count_pose_msg = 0; // reset the counter of data to be averaged
+
+
+      }
+    }else{
+      // DON'T get the stream data from camera and clear garbage data
+      gb_x_sum = 0;
+      gb_y_sum = 0;
+      gb_z_sum = 0;
+      gb_xq_sum = 0;
+      gb_yq_sum = 0;
+      gb_zq_sum = 0;
+      gb_wq_sum = 0;
+
+    }
+  }
+
+  
 
 
   void moveToDafaultFlagCallback(const std_msgs::Bool::ConstPtr& msg)
@@ -913,6 +911,7 @@ public:
     {
       ROS_INFO("servoStopCallback: stop motion");
       move_group.stop();
+      FLAG_XY_STOP = true;
     }
     else
     {
@@ -921,7 +920,7 @@ public:
   }
 
 
-  void switchStateCallback(const std_msgs::Int32::ConstPtr& msg)
+  void switchStateCallback(const std_msgs::Bool::ConstPtr& msg)
   {
     /*  switch always publish 1 if untouched
     *   if either of the switch is touched => publish 0 => the robot arm's motion should stop
@@ -1126,9 +1125,6 @@ public:
     target_pose = move_group.getCurrentPose().pose; // Cartesian Path from the current position
 
     // move according to the robot frame
-    // +X: back
-    // +Y: right
-    // +Z: up
     target_pose.position.x += X;
     target_pose.position.y += Y;
     target_pose.position.z += Z; 
@@ -1148,8 +1144,8 @@ public:
       if (fraction == 1.0)
         break;
     }
-    if (fraction != 1.0)
-      return false;
+    // if (fraction != 1.0)
+    //   return false;
 
     // ================================= modify the velocity of Cartesian path ================================= //
     // First create a RobotTrajectory object

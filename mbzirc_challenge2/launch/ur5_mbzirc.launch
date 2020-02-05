@@ -18,19 +18,19 @@
   <node name="mbzirc_ur5_control" pkg="mbzirc_challenge2" type="mbzirc_ur5_control" respawn="false" output="screen"/>
 
   <!-- Initialize Serial node (Arduino Control)-->
-  <node name="mag_serial_node" pkg="mag_serial" type="mag_serial_node" respawn="false" output="screen"/>
+  <!--<node name="mag_serial_node" pkg="mag_serial" type="mag_serial_node" respawn="false" output="screen"/> -->
 
   <!-- Initialize Arduino: Switch -->
-  <!-- <node name="serial_node_switch" pkg="rosserial_python" type="serial_node.py" respawn="false" output="screen">
-    <param name="port" value="/dev/ttyACM0"/>
+  <node name="serial_node_switch" pkg="rosserial_python" type="serial_node.py" respawn="false" output="screen">
+    <param name="port" value="/dev/ttyACM2"/>
     <param name="baud" value="9600"/>
-  </node> -->
+  </node>
 
   <!-- Initialize 1D lidar node-->
-  <!-- <node name="1D_lidar" pkg="teraranger" type="evo"> -->
-    <!-- <param name="_portname" value="/dev/ttyACM0" />  -->
-    <!-- <param name="_sensor_type" value="Evo_3m" /> -->
-  <!-- </node> -->
+  <node name="lidar_1D" pkg="teraranger" type="evo" respawn="false" output="screen">
+    <param name="portname" value="/dev/ttyACM3" />
+    <param name="sensor_type" value="Evo_3m" />
+  </node>
 
 
 
