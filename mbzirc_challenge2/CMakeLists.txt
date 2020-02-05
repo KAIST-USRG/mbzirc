@@ -12,7 +12,6 @@ endif()
 
 find_package(catkin REQUIRED
   COMPONENTS
-    mission_manager
     interactive_markers
     moveit_core
     moveit_visual_tools
@@ -27,7 +26,6 @@ find_package(catkin REQUIRED
     tf2_eigen
     tf2_geometry_msgs
     message_generation
-<<<<<<< HEAD
     mbzirc_msgs
 )
 find_package(Boost REQUIRED system filesystem date_time thread)
@@ -37,16 +35,6 @@ find_package(Boost REQUIRED system filesystem date_time thread)
 #   go_to_brick.srv
 #   place_in_container.srv
 #)
-=======
-)
-find_package(Boost REQUIRED system filesystem date_time thread)
-
-add_service_files(
-   FILES
-   go_to_brick.srv
-   place_in_container.srv
-)
->>>>>>> navigation
 
 
 #set(THIS_PACKAGE_INCLUDE_DIRS
@@ -109,8 +97,4 @@ add_executable(mbzirc_ur5_control src/mbzirc_ur5_control.cpp)
 target_link_libraries(mbzirc_ur5_control ${catkin_LIBRARIES} ${Boost_LIBRARIES})
 install(TARGETS mbzirc_ur5_control DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION})
 
-<<<<<<< HEAD
 # add_dependencies(mbzirc_ur5_control ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
-=======
-add_dependencies(mbzirc_ur5_control ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
->>>>>>> navigation

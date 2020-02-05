@@ -4,6 +4,7 @@ import rospy
 from geometry_msgs.msg import PoseStamped
 from geometry_msgs.msg import Twist
 #from service_ctl.srv import ugv_move, ugv_moveResponse
+from service_ctl.srv import ugv_move, ugv_moveResponse
 from std_srvs.srv import Trigger, TriggerResponse
 import tf
 
@@ -31,13 +32,15 @@ class GotoBrick:
         self.start_flag = False
 
         if self.service_control:
-            self.service = rospy.Service('test', Trigger, self.run)
+            #self.service = rospy.Service('test', Trigger, self.run)
+            self.service = rospy.Service('goto_msg', ugv_move, self.run)
             rospy.spin()
     
     def service_callback(self, req):
         rospy.loginfo('Service Received')
         self.start_flag = True
-        return TriggerResponse(True, 'Test')
+        #return TriggerResponse(True, 'Test')
+        return ugv_moveResponse(True)
 
     def pose_callback(self, pose_msg):
         quaternion = (
@@ -94,7 +97,6 @@ class GotoBrick:
             r.sleep()
             seq += 1
         rospy.loginfo('Brick closed!')
-        return TriggerResponse(True, 'Finish')
 
 if __name__ == "__main__":
     gotoBrick = GotoBrick()
