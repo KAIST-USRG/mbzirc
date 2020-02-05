@@ -126,10 +126,7 @@ private:
   // Publisher
 
   ros::Publisher avg_pose_pub;
-  ros::Publisher finish_stop_xy_pub;
-  ros::Publisher finish_stop_yaw_pub;
   ros::Publisher magnet_state_pub;  
-  ros::Publisher moveToStorageSide_finished_flag_pub;
   ros::Publisher moveToDefault_finished_flag_pub;
   ros::Publisher readCamData_flag_pub;
   
@@ -138,11 +135,7 @@ private:
   ros::Subscriber manual_moveXVZ_sub;
   ros::Subscriber moveToDefault_flag_sub;
   ros::Subscriber moveToStorageSide_flag_sub;
-  ros::Subscriber moveXYZ_sub;
-  ros::Subscriber plate_xy_move_sub;
-  ros::Subscriber plate_xy_offset_sub;
   ros::Subscriber plate_yaw_incorrect_sub;
-  ros::Subscriber plate_yaw_move_sub;
   ros::Subscriber pose_from_cam_sub;
   ros::Subscriber readCamData_flag_sub;
   ros::Subscriber servo_stop_sub;
@@ -169,7 +162,6 @@ private:
   ros::ServiceClient go_to_brick_sc;
   ros::ServiceClient place_in_container_sc;
   ros::ServiceClient visual_servo_XY_sc;
-  ros::ServiceClient visual_servo_yaw_sc;
 
   // ServiceServer
   ros::ServiceServer go_to_brick_ss;
@@ -222,10 +214,7 @@ public:
     // ========================  Node Communications
     // Publisher
     avg_pose_pub  = nh.advertise<geometry_msgs::Pose>("/avg_pose", 10);
-    finish_stop_xy_pub = nh.advertise<std_msgs::Bool>("/finish_stop_xy", 10);
-    finish_stop_yaw_pub = nh.advertise<std_msgs::Bool>("/finish_stop_yaw", 10);
     magnet_state_pub = nh.advertise<std_msgs::Bool>("/magnet_on", 10);
-    moveToStorageSide_finished_flag_pub = nh.advertise<std_msgs::Bool>("/moveToStorageSide_finish_flag", 10);
     moveToDefault_finished_flag_pub = nh.advertise<std_msgs::Bool>("/moveToDefault_finish_flag", 10);
     readCamData_flag_pub = nh.advertise<std_msgs::Bool>("/readCamData_Flag", 10);
 
@@ -234,11 +223,8 @@ public:
     
     manual_moveXVZ_sub = nh.subscribe("/manual_moveXVZ", 10, &Arm::manual_moveXYZ, this);
     moveToDefault_flag_sub = nh.subscribe("/moveToDefault_flag", 10, &Arm::moveToDafaultFlagCallback, this);
-    // plate_xy_offset_sub = nh.subscribe("/plate_xy_offset", 1, &Arm::plateXYOffsetCallback, this);
     plate_yaw_incorrect_sub = nh.subscribe("/ur5_rotation_incorrect", 1, &Arm::plateYawIncorrectCallback, this);
-    // plate_yaw_move_sub = nh.subscribe("/plate_yaw_move", 1, &Arm::plateYawMoveCallback, this);
     pose_from_cam_sub = nh.subscribe("/teraranger_evo", 10, &Arm::calcAvgCallback_Z, this);
-    // moveXYZ_sub = nh.subscribe("avg_pose", 10, &Arm::_moveXYZCallback, this);
     readCamData_flag_sub = nh.subscribe("/readCamData_Flag", 100, &Arm::readCamDataFlagCallback, this);
     servo_stop_sub = nh.subscribe("/ur5_stop", 1, &Arm::servoStopCallback, this);
     switch_state_sub = nh.subscribe("/switch_state", 1, &Arm::switchStateCallback, this);
@@ -248,7 +234,6 @@ public:
     go_to_brick_sc = nh.serviceClient<mbzirc_msgs::go_to_brick>("/go_to_brick");
     place_in_container_sc = nh.serviceClient<mbzirc_msgs::place_in_container>("/place_in_container");
     visual_servo_XY_sc = nh.serviceClient<mbzirc_msgs::visual_servo_XY>("/visual_servo_XY");
-    // visual_servo_yaw_sc = nh.serviceClient<mbzirc_msgs::visual_servo_yaw>("/visual_servo_yaw");
 
     // Service Server
     go_to_brick_ss = nh.advertiseService("/go_to_brick", &Arm::_goToBrickServiceCallback, this);
@@ -750,7 +735,7 @@ public:
   }
 
 
-void calcAvgCallback_Z(const sensor_msgs::Range::ConstPtr& msg)
+  void calcAvgCallback_Z(const sensor_msgs::Range::ConstPtr& msg)
   {
     /*  Read the brick pose from the camera
     *   publish the processed data
@@ -840,37 +825,10 @@ void calcAvgCallback_Z(const sensor_msgs::Range::ConstPtr& msg)
   }
 
 
-  void plateXYOffsetCallback(const geometry_msgs::Point::ConstPtr& msg)
-  {
-    /*  Align camera with the center of the brick's plate (XY plane) 
-    */
-    ROS_INFO("plateXYOffsetCallback: move XY"); // Pixel distance
-    moveXYZSlowly(msg->x, msg->y, 0, 0.02, 0.02);
-    finish_stop_xy_msg.data = true;
-    finish_stop_xy_pub.publish(finish_stop_xy_msg);
-  }
-
-
-  void plateYawMoveCallback(const std_msgs::Bool::ConstPtr& msg)
-  {
-    /*  Align camera with the brick's plate (Yaw Angle)
-    */
-    if(msg->data == true)
-    {
-      ROS_INFO("plateYawMoveCallback: rotate end_effector to correct the yaw angle");
-      moveYawSlowly(LEFT, 0.02, 0.02);
-    }
-    else
-    {
-      // do nothing
-    }
-  }
-
-
   void plateYawIncorrectCallback(const std_msgs::Bool::ConstPtr& msg)
   {
     /*  The bounding box of the plate is similar when yaw angle is at -rad and rad
-    *   We initially turn Left in plateYawMoveCallback, if it's wrong direction
+    *   We initially turn Left, if it's wrong direction
     *   We turn the otherside (rely on topic msg from camera node)
     */
     if(msg->data == true)
@@ -878,9 +836,7 @@ void calcAvgCallback_Z(const sensor_msgs::Range::ConstPtr& msg)
       ROS_INFO("plateYawIncorrectCallback: wrong direction of yaw");
       FLAG_YAW_INCORRECT = true;
       move_group.stop();
-      
-      // resetYaw();
-      // moveYawSlowly(RIGHT, 0.02, 0.02);
+    
     }
     else
     {
