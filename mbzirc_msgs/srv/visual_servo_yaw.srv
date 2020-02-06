@@ -1,3 +1,4 @@
-bool waiting_for_data_yaw		
+bool waiting_for_data_yaw	
+bool increase_margin	
 ---
 float64 yaw			# yaw error in radian

@@ -83,7 +83,7 @@ bool FLAG_READ_CAM_DATA   = false;    // Should the arm read message from camera
 bool FLAG_SWITCH_TOUCHED  = false;
 bool FLAG_YAW_INCORRECT   = false;
 bool FLAG_XY_STOP         = false;
-bool FLAG_yaw_STOP        = false;
+bool FLAG_YAW_STOP        = false;
 
 
 int   gb_count_pose_msg   = 0;
@@ -327,31 +327,33 @@ public:
     ROS_INFO("================== Visual Servo yaw  ==================");
     {
       // reset flag used in this Service
-      FLAG_yaw_STOP = false;
+      FLAG_YAW_STOP = false;
       visual_servo_yaw_srv.request.waiting_for_data_yaw = true;
-      if(visual_servo_yaw_sc.call(visual_servo_yaw_srv))
+      visual_servo_yaw_srv.request.increase_margin = false;
+      while(true)
       {
-        std::cout << "visual_servo_yaw_sc: Response : " << visual_servo_yaw_srv.response.yaw << std::endl;
-        moveYawSlowly(LEFT, 0.05, 0.05);
-        if(FLAG_YAW_INCORRECT == true)
+        if(visual_servo_yaw_sc.call(visual_servo_yaw_srv))
         {
-          resetYaw();
-          moveYawSlowly(RIGHT, 0.05, 0.05);
-        }
+          std::cout << "visual_servo_yaw_sc: Response : " << visual_servo_yaw_srv.response.yaw << std::endl;
+          moveYawSlowly(LEFT, 0.05, 0.05);
+          if(FLAG_YAW_INCORRECT == true)
+          {
+            resetYaw();
+            moveYawSlowly(RIGHT, 0.05, 0.05);
+          }
 
-        if (FLAG_yaw_STOP != true) // cannot reach to the brick
-        {
-          ROS_INFO("Visual Servo yaw: Cannot find the correct Yaw angle");
-          res.workspace_reachable = false;
-          res.success_or_fail = false;   
-          return true;
-        }
+          if (FLAG_YAW_STOP == true) // cannot reach to the brick
+          {
+            break;
+          }
 
-      }else 
-      {  // fail to request service
-        std::cout << "visual_servo_yaw_sc: Failed to call service" << std::endl;
-        return false;
+        }else 
+        {  // fail to request service
+          std::cout << "visual_servo_yaw_sc: Failed to call service" << std::endl;
+          return false;
+        }
       }
+      
     }
 
 
@@ -943,7 +945,7 @@ public:
         FLAG_XY_STOP = true;
       }else if (gb_servo_stop_signal == 1)
       {
-        FLAG_yaw_STOP = true;
+        FLAG_YAW_STOP = true;
       }else{
         // cannot reach here
         assert(true);
