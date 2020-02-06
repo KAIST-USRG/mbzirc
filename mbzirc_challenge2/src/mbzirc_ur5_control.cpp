@@ -50,7 +50,7 @@
 #include <tf/transform_broadcaster.h>
 
 
-#define DEBUG
+// #define DEBUG
 #define DELAY                 1.0         // for sleep function => robot updating states => 0.4 s fail (?)
 #define PLANNING_TIMEOUT      2
 #define NUM_SUM               3           // to average the pose message
@@ -283,78 +283,84 @@ public:
       bool success{move_group.plan(my_plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS};
       ROS_INFO_NAMED("tutorial", "Make EE parallel to the ground: %s", success ? "SUCCEEDED" : "FAILED");
 
-      #ifdef DEBUG
-        visual_tools.prompt("Press 'next' to front position");
-      #endif
+      // #ifdef DEBUG
+        // visual_tools.prompt("Press 'next' to make EE parallel to the ground");
+      // #endif
 
       move_group.move();                      // BLOCKING FUNCTION
 
     }
     
     
-    ROS_INFO("============== SERVICE CLIENT to Camera node: Visual Servo XY ==============");
-    {
-      // reset flag used in this Service
-      gb_servo_stop_signal = 0;
-      FLAG_XY_STOP = false;
-      visual_servo_XY_srv.request.waiting_for_data_XY = true;
-      visual_servo_XY_srv.request.brick_color_code = req.target_brick_color_code;
-      if(visual_servo_XY_sc.call(visual_servo_XY_srv))
-      {
-        std::cout << "visual_servo_XY_sc: Response : " << visual_servo_XY_srv.response.x << std::endl;
-        std::cout << "visual_servo_XY_sc: Response : " << visual_servo_XY_srv.response.y << std::endl;
-        float MAX_DIST = 1;
-        bool xy_success = moveXYZSlowly(visual_servo_XY_srv.response.x * MAX_DIST, 
-                                       visual_servo_XY_srv.response.y * MAX_DIST, 
-                                       0, 0.05, 0.05);
+    // ROS_INFO("============== SERVICE CLIENT to Camera node: Visual Servo XY ==============");
+    // {
+    //   // reset flag used in this Service
+    //   gb_servo_stop_signal = 0;
+    //   FLAG_XY_STOP = false;
+    //   visual_servo_XY_srv.request.waiting_for_data_XY = true;
+    //   visual_servo_XY_srv.request.brick_color_code = req.target_brick_color_code;
+    //   if(visual_servo_XY_sc.call(visual_servo_XY_srv))
+    //   {
+    //     std::cout << "visual_servo_XY_sc: Response : " << visual_servo_XY_srv.response.x << std::endl;
+    //     std::cout << "visual_servo_XY_sc: Response : " << visual_servo_XY_srv.response.y << std::endl;
+    //     float MAX_DIST = 1;
+    //     bool xy_success = moveXYZSlowly(visual_servo_XY_srv.response.x * MAX_DIST, 
+    //                                    visual_servo_XY_srv.response.y * MAX_DIST, 
+    //                                    0, 0.05, 0.05);
 
-        if (FLAG_XY_STOP != true) // cannot reach to the brick
-        {
-          ROS_INFO("Visual Servo XY: Cannot reach the brick");
-          res.workspace_reachable = false;
-          res.success_or_fail = false;   
-          return true;
-        }
+    //     if (FLAG_XY_STOP != true) // cannot reach to the brick
+    //     {
+    //       ROS_INFO("Visual Servo XY: Cannot reach the brick");
+    //       res.workspace_reachable = false;
+    //       res.success_or_fail = false;   
+    //       return true;
+    //     }
 
-      }else 
-      {  // fail to request service
-        std::cout << "visual_servo_XY_sc: Failed to call service" << std::endl;
-        return false;
-      }
-    }
+    //   }else 
+    //   {  // fail to request service
+    //     std::cout << "visual_servo_XY_sc: Failed to call service" << std::endl;
+    //     return false;
+    //   }
+    // }
 
     
-    ROS_INFO("================== Visual Servo yaw  ==================");
-    {
-      // reset flag used in this Service
-      FLAG_YAW_STOP = false;
-      visual_servo_yaw_srv.request.waiting_for_data_yaw = true;
-      visual_servo_yaw_srv.request.increase_margin = false;
-      while(true)
-      {
-        if(visual_servo_yaw_sc.call(visual_servo_yaw_srv))
-        {
-          std::cout << "visual_servo_yaw_sc: Response : " << visual_servo_yaw_srv.response.yaw << std::endl;
-          moveYawSlowly(LEFT, 0.05, 0.05);
-          if(FLAG_YAW_INCORRECT == true)
-          {
-            resetYaw();
-            moveYawSlowly(RIGHT, 0.05, 0.05);
-          }
+    // ROS_INFO("================== Visual Servo yaw  ==================");
+    // {
+    //   // reset flag used in this Service
+    //   FLAG_YAW_STOP = false;
+    //   visual_servo_yaw_srv.request.waiting_for_data_yaw = true;
+    //   visual_servo_yaw_srv.request.increase_margin = false;
+    //   while(true)
+    //   {
+    //     if(visual_servo_yaw_sc.call(visual_servo_yaw_srv))
+    //     {
+    //       std::cout << "visual_servo_yaw_sc: Response : " << visual_servo_yaw_srv.response.yaw << std::endl;
+    //       moveYawSlowly(LEFT, 0.05, 0.05);
+    //       if(FLAG_YAW_INCORRECT == true)
+    //       {
+    //         resetYaw();
+    //         moveYawSlowly(RIGHT, 0.05, 0.05);
+    //       }
 
-          if (FLAG_YAW_STOP == true) // cannot reach to the brick
-          {
-            break;
-          }
+    //       if (FLAG_YAW_STOP == true) // cannot reach to the brick
+    //       {
+    //         break;
+    //       }else
+    //       {
+    //         visual_servo_yaw_srv.request.waiting_for_data_yaw = true;
+    //         visual_servo_yaw_srv.request.increase_margin = true;
+    //         resetYaw();
+    //       }
+          
 
-        }else 
-        {  // fail to request service
-          std::cout << "visual_servo_yaw_sc: Failed to call service" << std::endl;
-          return false;
-        }
-      }
+    //     }else 
+    //     {  // fail to request service
+    //       std::cout << "visual_servo_yaw_sc: Failed to call service" << std::endl;
+    //       return false;
+    //     }
+    //   }
       
-    }
+    // }
 
 
     ROS_INFO("====================== Trigger to read data from camera ======================");
@@ -655,12 +661,12 @@ public:
 
       if (req.brick_container_side == LEFT)
       {
-        target_pose.position.x = -0.60;
+        target_pose.position.x = -0.56;
         target_pose.position.y = -0.1;
         target_pose.position.z = 0.65;
       }else
       {
-        target_pose.position.x = 0.60;
+        target_pose.position.x = 0.56;
         target_pose.position.y = 0.1;
         target_pose.position.z = 0.65;
       }
@@ -719,6 +725,7 @@ public:
       ros::Duration(5).sleep();
       ROS_INFO("_placeInContainerServiceCallback: MAGNET_OFF");
       detachBrick();
+      deleteObject();
     }
 
     //  ====================== move back to the default position  ====================== //
@@ -734,7 +741,7 @@ public:
       magnet_state_msg.data = true;
       magnet_state_pub.publish(magnet_state_msg); // MAGNET OFF
       ROS_INFO("_placeInContainerServiceCallback: MAGNET_ON");
-      deleteObject();
+      
     }
   }
 
@@ -1201,7 +1208,7 @@ public:
     cartesian_plan.trajectory_ = trajectory_down;
 
     #ifdef DEBUG
-      visual_tools.prompt("Press 'next' to go down");
+      visual_tools.prompt("Press 'next' to moveXYZSlowly");
     #endif
 
     move_group.execute(cartesian_plan);
@@ -1320,7 +1327,8 @@ public:
     primitive_UGV_base2.dimensions.resize(3);
     primitive_UGV_base2.dimensions[0] = primitive_UGV_base.dimensions[0];  // x right
     primitive_UGV_base2.dimensions[1] = 0.12;  // y front
-    primitive_UGV_base2.dimensions[2] = 0.04;  // z up
+    // primitive_UGV_base2.dimensions[2] = 0.04;  // z up
+    primitive_UGV_base2.dimensions[2] = 0.59;  // z up
 
     geometry_msgs::Pose pose_UGV_base2; // Define a pose for the Robot_bottom (specified relative to frame_id)
     q.setRPY(0, 0, 0);
@@ -1329,7 +1337,8 @@ public:
     pose_UGV_base2.orientation.z = q[2];
     pose_UGV_base2.orientation.w = q[3];
     pose_UGV_base2.position.y = primitive_UGV_base2.dimensions[1]/2 + 0.05/2;
-    pose_UGV_base2.position.z = primitive_UGV_base2.dimensions[2]/2 - 0.29;
+    // pose_UGV_base2.position.z = primitive_UGV_base2.dimensions[2]/2 - 0.29;
+    pose_UGV_base2.position.z = -primitive_UGV_base2.dimensions[2]/2;
 
     UGV_base2.primitives.push_back(primitive_UGV_base2);
     UGV_base2.primitive_poses.push_back(pose_UGV_base2);
@@ -1412,7 +1421,7 @@ public:
     pose_Container_left_out.orientation.y = q[1];
     pose_Container_left_out.orientation.z = q[2];
     pose_Container_left_out.orientation.w = q[3];
-    pose_Container_left_out.position.x = -primitive_Container_left_out.dimensions[0]/2 - primitive_UGV_base.dimensions[0] / 2 - 0.33 + 0.02;
+    pose_Container_left_out.position.x = -primitive_Container_left_out.dimensions[0]/2 - primitive_UGV_base.dimensions[0] / 2 - 0.29;
     pose_Container_left_out.position.y = -primitive_Container_left_out.dimensions[1]/2 + 0.05/2 + 0.08 + 0.04;
     pose_Container_left_out.position.z = primitive_Container_left_out.dimensions[2]/2 - 0.59;
 
@@ -1439,7 +1448,7 @@ public:
     pose_Container_left_in.orientation.y = q[1];
     pose_Container_left_in.orientation.z = q[2];
     pose_Container_left_in.orientation.w = q[3];
-    pose_Container_left_in.position.x = -primitive_Container_left_in.dimensions[0]/2 - 0.4;
+    pose_Container_left_in.position.x = -primitive_Container_left_in.dimensions[0]/2 - primitive_UGV_base.dimensions[0] / 2;
     pose_Container_left_in.position.y = -0.58 - 0.15;
     pose_Container_left_in.position.z = primitive_Container_left_in.dimensions[2]/2 - 0.59;
 
@@ -1466,7 +1475,7 @@ public:
     pose_Container_left_low_in.orientation.y = q[1];
     pose_Container_left_low_in.orientation.z = q[2];
     pose_Container_left_low_in.orientation.w = q[3];
-    pose_Container_left_low_in.position.x = -primitive_Container_left_low_in.dimensions[0]/2 - 0.4;
+    pose_Container_left_low_in.position.x = pose_Container_left_in.position.x;
     pose_Container_left_low_in.position.y = pose_UGV_base.position.y;
     pose_Container_left_low_in.position.z = primitive_Container_left_low_in.dimensions[2]/2 - 0.59;
 
@@ -1493,7 +1502,7 @@ public:
     pose_Container_right_out.orientation.y = q[1];
     pose_Container_right_out.orientation.z = q[2];
     pose_Container_right_out.orientation.w = q[3];
-    pose_Container_right_out.position.x = primitive_Container_right_out.dimensions[0]/2 + primitive_UGV_base.dimensions[0] / 2 + 0.33;
+    pose_Container_right_out.position.x = primitive_Container_right_out.dimensions[0]/2 + primitive_UGV_base.dimensions[0] / 2 + 0.29;
     pose_Container_right_out.position.y = -primitive_Container_right_out.dimensions[1]/2 + 0.05/2 + 0.08 + 0.04;
     pose_Container_right_out.position.z = primitive_Container_right_out.dimensions[2]/2 - 0.59;
 
@@ -1520,7 +1529,7 @@ public:
     pose_Container_right_in.orientation.y = q[1];
     pose_Container_right_in.orientation.z = q[2];
     pose_Container_right_in.orientation.w = q[3];
-    pose_Container_right_in.position.x = primitive_Container_right_in.dimensions[0]/2 + 0.4;
+    pose_Container_right_in.position.x = primitive_Container_right_in.dimensions[0]/2 + primitive_UGV_base.dimensions[0] / 2;
     pose_Container_right_in.position.y = -0.58 - 0.15;
     pose_Container_right_in.position.z = primitive_Container_right_in.dimensions[2]/2 - 0.59;
 
@@ -1716,7 +1725,7 @@ public:
     current_state = move_group.getCurrentState();
     current_state->copyJointGroupPositions(joint_model_group, joint_group_positions);
 
-    joint_group_positions[0] = PI - PI/2;  // Radian rotate 90 from Default Position
+    joint_group_positions[0] = 3*PI/2;  // Radian rotate 90 from Default Position
 
     move_group.setJointValueTarget(joint_group_positions);
     move_group.setPlanningTime(PLANNING_TIMEOUT);
@@ -1741,8 +1750,8 @@ public:
     ros::Duration(0.5).sleep();
     target_pose = move_group.getCurrentPose().pose; // Cartesian Path from the current position
 
-    target_pose.position.x = 0.565;
-    target_pose.position.y = 0.1;
+    target_pose.position.x = -0.56;
+    target_pose.position.y = -0.1;
     target_pose.position.z = 0.65;
 
     waypoints_to_storage.push_back(target_pose);
