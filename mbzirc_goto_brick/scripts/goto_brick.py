@@ -36,11 +36,11 @@ class GotoBrick:
             self.service = rospy.Service('ugv_move_local', ugv_move, self.run)
             rospy.spin()
     
-    def service_callback(self, req):
-        rospy.loginfo('Service Received')
-        self.start_flag = True
-        #return TriggerResponse(True, 'Test')
-        return ugv_moveResponse(True)
+    #def service_callback(self, req):
+    #    rospy.loginfo('Service Received')
+    #    self.start_flag = True
+    #    #return TriggerResponse(True, 'Test')
+    #    return ugv_moveResponse(True)
 
     def pose_callback(self, pose_msg):
         quaternion = (
@@ -66,6 +66,10 @@ class GotoBrick:
             control_speed.linear.x = 0.0
             control_speed.linear.y = 0.0
             control_speed.angular.z = 10.0 * math.pi / 180 #convert degree/s to radian/s. 
+        elif self.raw_x < 0.5:
+            control_speed.linear.x = 0.0
+            control_speed.linear.y = self.raw_y * self.y_axis_reduce_gain
+            control_speed.angular.z = 0.0
         else:
             #goto brick
             control_speed.linear.x = self.raw_x * self.x_axis_reduce_gain
@@ -81,12 +85,13 @@ class GotoBrick:
         pass
 
     def is_arrived(self):
-        if 0.0 < self.raw_x < 0.7 and 0.0 < self.raw_y < 0.5:
+        if 0.0 < self.raw_x < 0.5 and 0.0 < self.raw_y < 0.4:
             return True
         else:
             return False
 
     def run(self, req=None):
+        rospy.loginfo('Go to brick!')
         r = rospy.Rate(20)
         seq = 0
         while not rospy.is_shutdown():
@@ -97,6 +102,7 @@ class GotoBrick:
             r.sleep()
             seq += 1
         rospy.loginfo('Brick closed!')
+        return ugv_moveResponse(True)
 
 if __name__ == "__main__":
     gotoBrick = GotoBrick()
