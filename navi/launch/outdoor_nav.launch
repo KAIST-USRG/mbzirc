@@ -1,0 +1,56 @@
+<?xml version="1.0"?>
+<launch>
+
+  <!-- Robot odometry-->
+  <node pkg="mbzirc_robot" type="mbzirc_robot_node" name="mbzirc_robot_node" output="screen" respawn="True" />
+
+  <!-- Static Transformation -->
+  <node pkg="tf" type="static_transform_publisher" name="fixed_odom" args="0.0 0.0 0.0 0.0 0.0 0.0 /map /odom 40" />
+  <node pkg="tf" type="static_transform_publisher" name="base2imu" args="0.0 0.0 0.0 0.0 0.0 0.0 /base_footprint /gx5_link 40" />
+  <node pkg="tf" type="static_transform_publisher" name="base2gps" args="0.0 0.0 0.0 0.0 0.0 0.0 /base_footprint /gps 40" />
+  <node pkg="tf" type="static_transform_publisher" name="base_footprint2lidar" args="0.0 0.0 0.9 0.0 -0.3 0.0 /base_footprint /velodyne 40" /> 
+
+
+  <!-- Group START-->
+  <group ns="outdoor_nav"> 
+  <!-- UTM listener-->
+  <node pkg="robot_localization" type="navsat_transform_node" name="navsat_transform" clear_params="true" output="screen">
+      <!--remap from="odometry/filtered" to="odometry/filtered_map" /-->
+      <remap from="gps/fix" to="/latlon/fix"/>
+      <remap from="imu/data" to="/gx5/imu/data"/>
+  </node>
+
+  <!-- EKF node-->
+  <node pkg="navi" type="navi_node" name="navi_node" output="screen" respawn="True" />
+
+  </group>
+
+  <!-- Move base node-->
+  <node name="map_server" pkg="map_server" type="map_server" args="$(find navi)/waypoint_files/Free.yaml">
+  <param name="frame_id" value="odom" />
+  </node>
+
+  <node pkg="move_base" type="move_base" respawn="false" name="move_base" output="screen">
+    
+    <rosparam file="$(find navi)/config/costmap_common_params.yaml" command="load" ns="global_costmap" />
+    <rosparam file="$(find navi)/config/costmap_common_params.yaml" command="load" ns="local_costmap" />
+    <rosparam file="$(find navi)/config/local_costmap_params.yaml" command="load" />
+    <rosparam file="$(find navi)/config/global_costmap_params.yaml" command="load" />
+    <rosparam file="$(find navi)/config/base_local_planner_params.yaml" command="load" /> 
+    <rosparam file="$(find navi)/config/move_base_params.yaml" command="load" />
+    
+    <param name="base_global_planner" type="string" value="navfn/NavfnROS" />
+    <param name="base_local_planner" value="base_local_planner/TrajectoryPlannerROS"/>
+
+    <remap from="odom" to="/outdoor_nav/odometry/EKF_estimated" />
+    <remap from="map" to="/map"/>
+    <remap from="cmd_vel" to="/move_base/cmd_vel" />
+    <remap from="scan" to="/scan" />
+  </node>
+
+
+  <!-- Mission planner ServiceServer : Not included in the "outdoor_nav" group-->
+
+
+
+</launch>

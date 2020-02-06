@@ -1,0 +1,6 @@
+locks:
+-
+  name    : pause
+  topic   : pause_navigation
+  timeout : 0.0
+  priority: 100

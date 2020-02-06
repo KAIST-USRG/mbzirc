@@ -1,0 +1,25 @@
+obstacle_range: 3.0
+raytrace_range: 3.5
+
+
+#footprint: [[-0.3, -0.555], [-0.3, 0.155], [0.3, 0.155], [0.3, -0.555]]
+footprint: [[-0.555,-0.3], [0.155,-0.3], [0.155,0.3], [-0.555,0.3]]
+#robot_radius: 0.17
+
+inflation_radius: 1.0
+cost_scaling_factor: 3.0
+
+map_type: costmap
+
+#static:
+#    map_topic: /outdoor_waypoint_nav/map
+#    subscribe_to_updates: true
+
+obstacles_laser:
+    observation_sources: laser
+    laser: {data_type: PointCloud2, clearing: true, marking: true, topic: /velodyne_points_, inf_is_valid: true}
+
+
+#static_layer:
+#    enabled:              true
+#    map_topic:            "/outdoor_waypoint_nav/map"

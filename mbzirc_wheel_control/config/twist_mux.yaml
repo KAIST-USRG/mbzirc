@@ -1,0 +1,16 @@
+topics:
+-
+  name    : navigation
+  topic   : move_base/cmd_vel 
+  timeout : 0.1
+  priority: 10
+-
+  name    : goto_brick 
+  topic   : goto_brick/cmd_vel 
+  timeout : 0.1
+  priority: 11
+-
+  name    : joystick
+  topic   : joy/cmd_vel
+  timeout : 0.1
+  priority: 100

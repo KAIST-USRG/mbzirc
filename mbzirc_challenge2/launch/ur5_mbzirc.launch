@@ -22,15 +22,15 @@
 
   <!-- Initialize Arduino: Switch -->
   <node name="serial_node_switch" pkg="rosserial_python" type="serial_node.py" respawn="false" output="screen">
-    <param name="port" value="/dev/ttyACM2"/>
+    <param name="port" value="/dev/ttyACM4"/>
     <param name="baud" value="9600"/>
   </node>
 
   <!-- Initialize 1D lidar node-->
   <node name="lidar_1D" pkg="teraranger" type="evo" respawn="false" output="screen">
-    <param name="_portname" value="/dev/ttyACM3" />
-    <param name="_sensor_type" value="Evo_3m" />
-  </node>
+    <param name="portname" value="/dev/ttyACM3" />
+    <param name="sensor_type" value="Evo_3m" />
+  </node> 
 
 
 
