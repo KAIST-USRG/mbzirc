@@ -81,16 +81,16 @@ tf2::Quaternion q;
 
 bool FLAG_READ_CAM_DATA   = false;    // Should the arm read message from camera?
 bool FLAG_SWITCH_TOUCHED  = false;
-bool FLAG_SWITCH_RESET    = true;
-bool FLAG_MAGNET_ON       = true;      // Is the magnet on?
 bool FLAG_YAW_INCORRECT   = false;
 bool FLAG_XY_STOP         = false;
+bool FLAG_yaw_STOP        = false;
 
 
 int   gb_count_pose_msg   = 0;
 int   gb_discard_noise    = 0;
 int   gb_count_move       = 0;  // 0 for moveXY, 1 for moveZ
 int   gb_count_box        = 0;
+int   gb_servo_stop_signal= 0;
 float gb_x_sum            = 0;
 float gb_y_sum            = 0;
 float gb_z_sum            = 0;
@@ -162,6 +162,7 @@ private:
   ros::ServiceClient go_to_brick_sc;
   ros::ServiceClient place_in_container_sc;
   ros::ServiceClient visual_servo_XY_sc;
+  ros::ServiceClient visual_servo_yaw_sc;
 
   // ServiceServer
   ros::ServiceServer go_to_brick_ss;
@@ -234,6 +235,8 @@ public:
     go_to_brick_sc = nh.serviceClient<mbzirc_msgs::go_to_brick>("/go_to_brick");
     place_in_container_sc = nh.serviceClient<mbzirc_msgs::place_in_container>("/place_in_container");
     visual_servo_XY_sc = nh.serviceClient<mbzirc_msgs::visual_servo_XY>("/visual_servo_XY");
+    visual_servo_yaw_sc = nh.serviceClient<mbzirc_msgs::visual_servo_yaw>("/visual_servo_yaw");
+
 
     // Service Server
     go_to_brick_ss = nh.advertiseService("/go_to_brick", &Arm::_goToBrickServiceCallback, this);
@@ -257,60 +260,99 @@ public:
   {    
     /*  The service server to communicate with mission_manager (central planner)
     */
-    // ========== Adjust Default Position According to the target container side ========== //
+
     ROS_INFO("========== Adjust Default Position According to the target container side ==========");
     {
-      // if (req.target_brick_container_side_left_right == LEFT){
-      //   moveToDefault(LEFT);
-      // }else
-      // {
-      //   moveToDefault(RIGHT);
-      // }
       moveToDefault(RIGHT);
+
+      // Need the EE to be parallel to the ground
+      current_state = move_group.getCurrentState();
+      ros::Duration(0.5).sleep();
+      current_state = move_group.getCurrentState();
+      // Next get the current set of joint values for the group.
+      std::vector<double> joint_group_positions;
+      current_state->copyJointGroupPositions(joint_model_group, joint_group_positions);
+      joint_group_positions[4] = -PI/2;
+      move_group.setJointValueTarget(joint_group_positions);
+      move_group.setMaxVelocityScalingFactor(0.001);
+      move_group.setMaxAccelerationScalingFactor(0.001);
+      move_group.setPlanningTime(PLANNING_TIMEOUT);
+      move_group.setGoalJointTolerance(0.00000001);
+
+
+      bool success{move_group.plan(my_plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS};
+      ROS_INFO_NAMED("tutorial", "Make EE parallel to the ground: %s", success ? "SUCCEEDED" : "FAILED");
+
+      #ifdef DEBUG
+        visual_tools.prompt("Press 'next' to front position");
+      #endif
+
+      move_group.move();                      // BLOCKING FUNCTION
+
     }
     
+    
+    ROS_INFO("============== SERVICE CLIENT to Camera node: Visual Servo XY ==============");
+    {
+      // reset flag used in this Service
+      gb_servo_stop_signal = 0;
+      FLAG_XY_STOP = false;
+      visual_servo_XY_srv.request.waiting_for_data_XY = true;
+      visual_servo_XY_srv.request.brick_color_code = req.target_brick_color_code;
+      if(visual_servo_XY_sc.call(visual_servo_XY_srv))
+      {
+        std::cout << "visual_servo_XY_sc: Response : " << visual_servo_XY_srv.response.x << std::endl;
+        std::cout << "visual_servo_XY_sc: Response : " << visual_servo_XY_srv.response.y << std::endl;
+        float MAX_DIST = 1;
+        bool xy_success = moveXYZSlowly(visual_servo_XY_srv.response.x * MAX_DIST, 
+                                       visual_servo_XY_srv.response.y * MAX_DIST, 
+                                       0, 0.05, 0.05);
 
-    // ROS_INFO("============== SERVICE CLIENT to Camera node: Visual Servo XY ==============");
-    // {
-    //   visual_servo_XY_srv.request.waiting_for_data_XY = true;
-    //   if(visual_servo_XY_sc.call(visual_servo_XY_srv))
-    //   {
-    //     std::cout << "visual_servo_XY_sc: Response : " << visual_servo_XY_srv.response.x << std::endl;
-    //     std::cout << "visual_servo_XY_sc: Response : " << visual_servo_XY_srv.response.y << std::endl;
-    //     float MAX_DIST = 1;
-    //     bool xy_success = moveXYZSlowly(visual_servo_XY_srv.response.x * MAX_DIST, 
-    //                                    visual_servo_XY_srv.response.y * MAX_DIST, 
-    //                                    0, 0.05, 0.05);
+        if (FLAG_XY_STOP != true) // cannot reach to the brick
+        {
+          ROS_INFO("Visual Servo XY: Cannot reach the brick");
+          res.workspace_reachable = false;
+          res.success_or_fail = false;   
+          return true;
+        }
 
-    //   }else 
-    //   {  // fail to request service
-    //     std::cout << "visual_servo_XY_sc: Failed to call service" << std::endl;
-    //     return false;
-    //   }
-    // }
+      }else 
+      {  // fail to request service
+        std::cout << "visual_servo_XY_sc: Failed to call service" << std::endl;
+        return false;
+      }
+    }
 
     
-    // ROS_INFO("================== Visual Servo yaw  ==================");
-    // {
-    //   if (FLAG_XY_STOP == true) 
-    //   {
-    //     // The arm can reach the brick, then proceed to correct the yaw angle
-    //     moveYawSlowly(LEFT, 0.05, 0.05);
-    //     if(FLAG_YAW_INCORRECT == true)
-    //     {
-    //       resetYaw();
-    //       moveYawSlowly(RIGHT, 0.05, 0.05);
-    //     }
-    //   }else{
-    //     // The arm cannot reach the brick
-    //     res.workspace_reachable = false;
-    //     res.success_or_fail = false;
-    //     return true;
-        
-    //   }
-       
-    // }
-    ROS_INFO("====================== at default position ======================");
+    ROS_INFO("================== Visual Servo yaw  ==================");
+    {
+      // reset flag used in this Service
+      FLAG_yaw_STOP = false;
+      visual_servo_yaw_srv.request.waiting_for_data_yaw = true;
+      if(visual_servo_yaw_sc.call(visual_servo_yaw_srv))
+      {
+        std::cout << "visual_servo_yaw_sc: Response : " << visual_servo_yaw_srv.response.yaw << std::endl;
+        moveYawSlowly(LEFT, 0.05, 0.05);
+        if(FLAG_YAW_INCORRECT == true)
+        {
+          resetYaw();
+          moveYawSlowly(RIGHT, 0.05, 0.05);
+        }
+
+        if (FLAG_yaw_STOP != true) // cannot reach to the brick
+        {
+          ROS_INFO("Visual Servo yaw: Cannot find the correct Yaw angle");
+          res.workspace_reachable = false;
+          res.success_or_fail = false;   
+          return true;
+        }
+
+      }else 
+      {  // fail to request service
+        std::cout << "visual_servo_yaw_sc: Failed to call service" << std::endl;
+        return false;
+      }
+    }
 
 
     ROS_INFO("====================== Trigger to read data from camera ======================");
@@ -349,9 +391,11 @@ public:
         if (!go_to_brick_srv.response.workspace_reachable) // Check if that position is in workspace
         {
           // Return to mission maneger
+          ROS_INFO("go_to_brick_sc: Cannot find the correct Yaw angle");
           res.workspace_reachable = false; 
           return true;
         }
+
         if (go_to_brick_srv.response.success)
           gb_count_box =  (gb_count_box % 5) + 1;
       }
@@ -428,8 +472,6 @@ public:
       target_pose.position.z = target_pose.position.z - (req.z / 2) + DIST_LIDAR_TO_MAGNET + DIST_EE_TO_MAGNET + Z_OFFSET;
       waypoints_down.push_back(target_pose);
 
-      move_group.setMaxVelocityScalingFactor(0.1);
-      move_group.setMaxAccelerationScalingFactor(0.1);
       move_group.setPlanningTime(PLANNING_TIMEOUT);
       
 
@@ -499,7 +541,7 @@ public:
       magnet_state_msg.data = true;
       magnet_state_pub.publish(magnet_state_msg); // MAGNET ON
       ROS_INFO("_goToBrickServiceCallback: MAGNET_ON");
-      ros::Duration(2.0).sleep();
+      ros::Duration(1.0).sleep();
       attachBrick(req.brick_color_code);
     }
 
@@ -540,8 +582,8 @@ public:
       joint_group_positions[5] = 0;
       
       move_group.setJointValueTarget(joint_group_positions);
-      move_group.setMaxVelocityScalingFactor(0.1);
-      move_group.setMaxAccelerationScalingFactor(0.1);
+      move_group.setMaxVelocityScalingFactor(0.4);
+      move_group.setMaxAccelerationScalingFactor(0.4);
       move_group.setPlanningTime(PLANNING_TIMEOUT);
       move_group.setGoalJointTolerance(0.01);
 
@@ -588,8 +630,8 @@ public:
       move_group.setJointValueTarget(joint_group_positions);
       move_group.setPlanningTime(PLANNING_TIMEOUT);
       move_group.setGoalJointTolerance(0.01);
-      move_group.setMaxVelocityScalingFactor(0.1);
-      move_group.setMaxAccelerationScalingFactor(0.1);
+      move_group.setMaxVelocityScalingFactor(0.4);
+      move_group.setMaxAccelerationScalingFactor(0.4);
 
       bool success{move_group.plan(my_plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS};
       ROS_INFO_NAMED("tutorial", "moveToStorageSide Step 2: Turn %s", success ? "SUCCEEDED" : "FAILED");
@@ -628,8 +670,8 @@ public:
 
       waypoints_to_storage.push_back(target_pose);
 
-      move_group.setMaxVelocityScalingFactor(0.1);
-      move_group.setMaxAccelerationScalingFactor(0.1);
+      move_group.setMaxVelocityScalingFactor(0.2);
+      move_group.setMaxAccelerationScalingFactor(0.2);
       move_group.setPlanningTime(PLANNING_TIMEOUT);
 
       moveit_msgs::RobotTrajectory trajectory_to_storage;
@@ -679,11 +721,6 @@ public:
 
     //  ====================== move back to the default position  ====================== //
     {
-      // if (req.brick_container_side == LEFT){
-      //   moveToDefault(LEFT);
-      // }else{
-      //   moveToDefault(RIGHT);
-      // }
       moveToDefault(RIGHT);
       
       moveToDefault_finished_flag_msg.data = true;
@@ -843,9 +880,6 @@ public:
     }
   }
 
-  
-
-
   void moveToDafaultFlagCallback(const std_msgs::Bool::ConstPtr& msg)
   {
     // Subscribe: moveToDefault_flag
@@ -904,7 +938,17 @@ public:
     {
       ROS_INFO("servoStopCallback: stop motion");
       move_group.stop();
-      FLAG_XY_STOP = true;
+      if (gb_servo_stop_signal == 0)  // first stop from cam node is XY
+      {
+        FLAG_XY_STOP = true;
+      }else if (gb_servo_stop_signal == 1)
+      {
+        FLAG_yaw_STOP = true;
+      }else{
+        // cannot reach here
+        assert(true);
+      }
+      gb_servo_stop_signal += 1;
     }
     else
     {
@@ -1027,8 +1071,8 @@ public:
     waypoints_down.push_back(target_pose);
 
 
-    move_group.setMaxVelocityScalingFactor(0.1);
-    move_group.setMaxAccelerationScalingFactor(0.1);
+    move_group.setMaxVelocityScalingFactor(0.4);
+    move_group.setMaxAccelerationScalingFactor(0.4);
     move_group.setPlanningTime(PLANNING_TIMEOUT);
 
 
@@ -1087,8 +1131,8 @@ public:
     
 
     move_group.setJointValueTarget(joint_group_positions);
-    move_group.setMaxVelocityScalingFactor(0.1);
-    move_group.setMaxAccelerationScalingFactor(0.1);
+    move_group.setMaxVelocityScalingFactor(0.4);
+    move_group.setMaxAccelerationScalingFactor(0.4);
     move_group.setPlanningTime(PLANNING_TIMEOUT);
     move_group.setGoalJointTolerance(0.01);
 
@@ -1675,8 +1719,8 @@ public:
     move_group.setJointValueTarget(joint_group_positions);
     move_group.setPlanningTime(PLANNING_TIMEOUT);
     move_group.setGoalJointTolerance(0.01);
-    move_group.setMaxVelocityScalingFactor(0.3);
-    move_group.setMaxAccelerationScalingFactor(0.3);
+    move_group.setMaxVelocityScalingFactor(0.1);
+    move_group.setMaxAccelerationScalingFactor(0.1);
     
     bool success{move_group.plan(my_plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS};
     ROS_INFO_NAMED("tutorial", "moveToStorageSide Step 2: Turn left %s", success ? "SUCCEEDED" : "FAILED");
@@ -1705,8 +1749,8 @@ public:
 
     waypoints_to_storage.push_back(target_pose);
 
-    move_group.setMaxVelocityScalingFactor(0.1);
-    move_group.setMaxAccelerationScalingFactor(0.1);
+    move_group.setMaxVelocityScalingFactor(0.01);
+    move_group.setMaxAccelerationScalingFactor(0.01);
     move_group.setPlanningTime(PLANNING_TIMEOUT);
 
     moveit_msgs::RobotTrajectory trajectory_to_storage;

@@ -1,4 +1,5 @@
-bool waiting_for_data_XY		
+bool waiting_for_data_XY	
+int64 brick_color_code 			        # COLOR_CODE : RED=0, GREEN=1, BLUE=2, ORANGE=3	
 ---
 float64 x			# x_distance error in camera frame
 float64 y			# y_distance error in camera frame
