@@ -50,7 +50,7 @@
 #include <tf/transform_broadcaster.h>
 
 
-#define DEBUG
+// #define DEBUG
 #define DELAY                 1.0         // for sleep function => robot updating states => 0.4 s fail (?)
 #define PLANNING_TIMEOUT      2
 #define NUM_SUM               3           // to average the pose message
@@ -292,75 +292,75 @@ public:
     }
     
     
-    // ROS_INFO("============== SERVICE CLIENT to Camera node: Visual Servo XY ==============");
-    // {
-    //   // reset flag used in this Service
-    //   gb_servo_stop_signal = 0;
-    //   FLAG_XY_STOP = false;
-    //   visual_servo_XY_srv.request.waiting_for_data_XY = true;
-    //   visual_servo_XY_srv.request.brick_color_code = req.target_brick_color_code;
-    //   if(visual_servo_XY_sc.call(visual_servo_XY_srv))
-    //   {
-    //     std::cout << "visual_servo_XY_sc: Response : " << visual_servo_XY_srv.response.x << std::endl;
-    //     std::cout << "visual_servo_XY_sc: Response : " << visual_servo_XY_srv.response.y << std::endl;
-    //     float MAX_DIST = 1;
-    //     bool xy_success = moveXYZSlowly(visual_servo_XY_srv.response.x * MAX_DIST, 
-    //                                    visual_servo_XY_srv.response.y * MAX_DIST, 
-    //                                    0, 0.05, 0.05);
+    ROS_INFO("============== SERVICE CLIENT to Camera node: Visual Servo XY ==============");
+    {
+      // reset flag used in this Service
+      gb_servo_stop_signal = 0;
+      FLAG_XY_STOP = false;
+      visual_servo_XY_srv.request.waiting_for_data_XY = true;
+      visual_servo_XY_srv.request.brick_color_code = req.target_brick_color_code;
+      if(visual_servo_XY_sc.call(visual_servo_XY_srv))
+      {
+        std::cout << "visual_servo_XY_sc: Response : " << visual_servo_XY_srv.response.x << std::endl;
+        std::cout << "visual_servo_XY_sc: Response : " << visual_servo_XY_srv.response.y << std::endl;
+        float MAX_DIST = 1;
+        bool xy_success = moveXYZSlowly(visual_servo_XY_srv.response.x * MAX_DIST, 
+                                       visual_servo_XY_srv.response.y * MAX_DIST, 
+                                       0, 0.05, 0.05);
 
-    //     if (FLAG_XY_STOP != true) // cannot reach to the brick
-    //     {
-    //       ROS_INFO("Visual Servo XY: Cannot reach the brick");
-    //       res.workspace_reachable = false;
-    //       res.success_or_fail = false;   
-    //       return true;
-    //     }
+        if (FLAG_XY_STOP != true) // cannot reach to the brick
+        {
+          ROS_INFO("Visual Servo XY: Cannot reach the brick");
+          res.workspace_reachable = false;
+          res.success_or_fail = false;   
+          return true;
+        }
 
-    //   }else 
-    //   {  // fail to request service
-    //     std::cout << "visual_servo_XY_sc: Failed to call service" << std::endl;
-    //     return false;
-    //   }
-    // }
+      }else 
+      {  // fail to request service
+        std::cout << "visual_servo_XY_sc: Failed to call service" << std::endl;
+        return false;
+      }
+    }
 
     
-    // ROS_INFO("================== Visual Servo yaw  ==================");
-    // {
-    //   // reset flag used in this Service
-    //   FLAG_YAW_STOP = false;
-    //   visual_servo_yaw_srv.request.waiting_for_data_yaw = true;
-    //   visual_servo_yaw_srv.request.increase_margin = false;
-    //   while(true)
-    //   {
-    //     if(visual_servo_yaw_sc.call(visual_servo_yaw_srv))
-    //     {
-    //       std::cout << "visual_servo_yaw_sc: Response : " << visual_servo_yaw_srv.response.yaw << std::endl;
-    //       moveYawSlowly(LEFT, 0.05, 0.05);
-    //       if(FLAG_YAW_INCORRECT == true)
-    //       {
-    //         resetYaw();
-    //         moveYawSlowly(RIGHT, 0.05, 0.05);
-    //       }
+    ROS_INFO("================== Visual Servo yaw  ==================");
+    {
+      // reset flag used in this Service
+      FLAG_YAW_STOP = false;
+      visual_servo_yaw_srv.request.waiting_for_data_yaw = true;
+      visual_servo_yaw_srv.request.increase_margin = false;
+      while(true)
+      {
+        if(visual_servo_yaw_sc.call(visual_servo_yaw_srv))
+        {
+          std::cout << "visual_servo_yaw_sc: Response : " << visual_servo_yaw_srv.response.yaw << std::endl;
+          moveYawSlowly(LEFT, 0.05, 0.05);
+          if(FLAG_YAW_INCORRECT == true)
+          {
+            resetYaw();
+            moveYawSlowly(RIGHT, 0.05, 0.05);
+          }
 
-    //       if (FLAG_YAW_STOP == true) // cannot reach to the brick
-    //       {
-    //         break;
-    //       }else
-    //       {
-    //         visual_servo_yaw_srv.request.waiting_for_data_yaw = true;
-    //         visual_servo_yaw_srv.request.increase_margin = true;
-    //         resetYaw();
-    //       }
+          if (FLAG_YAW_STOP == true) // cannot reach to the brick
+          {
+            break;
+          }else
+          {
+            visual_servo_yaw_srv.request.waiting_for_data_yaw = true;
+            visual_servo_yaw_srv.request.increase_margin = true;
+            resetYaw();
+          }
           
 
-    //     }else 
-    //     {  // fail to request service
-    //       std::cout << "visual_servo_yaw_sc: Failed to call service" << std::endl;
-    //       return false;
-    //     }
-    //   }
+        }else 
+        {  // fail to request service
+          std::cout << "visual_servo_yaw_sc: Failed to call service" << std::endl;
+          return false;
+        }
+      }
       
-    // }
+    }
 
 
     ROS_INFO("====================== Trigger to read data from camera ======================");
@@ -426,16 +426,15 @@ public:
       if(place_in_container_sc.call(place_in_container_srv)) 
       {
         std::cout << "place_in_container_sc: Response : " << place_in_container_srv.response.success << std::endl;
+        return true;
       }
       else {  // fail to request service
         std::cout << "place_in_container_sc: Failed to call service" << std::endl;
         return false;
       }
+    
+      return true;
     }
-
-    // All the services proceeded correctly
-    res.workspace_reachable = true;
-    res.success_or_fail = true;  
     return true;
   }
 
@@ -564,6 +563,25 @@ public:
       // Next get the current set of joint values for the group.
       current_state->copyJointGroupPositions(joint_model_group, joint_group_positions);
 
+
+      // if (req.container_side == LEFT)
+      // {
+        // joint_group_positions[0] = 0;  // Radian
+        // joint_group_positions[1] = -PI/2;
+        // joint_group_positions[2] = -PI/180*15;
+        // joint_group_positions[3] = PI + PI/180 * 15;
+        // joint_group_positions[4] = PI/2;
+        // joint_group_positions[5] = 0;
+      // }
+      // else
+      // {
+        // joint_group_positions[0] = PI;  // Radian
+        // joint_group_positions[1] = -PI/2;
+        // joint_group_positions[2] = PI/180 * 15;
+        // joint_group_positions[3] = 2 * PI - PI/180 * 15;
+        // joint_group_positions[4] = -PI/2;
+        // joint_group_positions[5] = 0;
+      // }
       joint_group_positions[0] = PI;  // Radian
       joint_group_positions[1] = -PI/2;
       joint_group_positions[2] = PI/180 * 45;
@@ -723,7 +741,6 @@ public:
       magnet_state_msg.data = true;
       magnet_state_pub.publish(magnet_state_msg); // MAGNET OFF
       ROS_INFO("_placeInContainerServiceCallback: MAGNET_ON");
-      return true;
       
     }
   }
@@ -1123,8 +1140,8 @@ public:
     
 
     move_group.setJointValueTarget(joint_group_positions);
-    move_group.setMaxVelocityScalingFactor(0.25);
-    move_group.setMaxAccelerationScalingFactor(0.25);
+    move_group.setMaxVelocityScalingFactor(0.4);
+    move_group.setMaxAccelerationScalingFactor(0.4);
     move_group.setPlanningTime(PLANNING_TIMEOUT);
     move_group.setGoalJointTolerance(0.01);
 
