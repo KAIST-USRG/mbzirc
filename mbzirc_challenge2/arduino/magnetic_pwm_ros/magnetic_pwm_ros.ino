@@ -20,6 +20,13 @@ int val;
 int flag;
 bool current_status;
 
+uint32_t cur_time = 0;
+uint32_t prev_time = 0;
+int time_MAG = 0;
+
+int cur_Flag = -1;
+int prev_Flag = -1;
+
 // switch
 int ledPin = 13;                // choose the pin for the LED
 int inputPin_s1 = 2;     
@@ -32,28 +39,12 @@ ros::Publisher switch_state_pub("switch_state", &switch_state_msg); // switch
 
 void messageCb( const std_msgs::Bool& magnet_on_msg) {
   if (magnet_on_msg.data) {
-    myservo_l.write(175);                  // sets the servo position according to the scaled value
-    delay(200);
-    flag = 1;
-    current_status = 1;
-    myservo_l.write(90);
-    delay(50);
-    myservo_r.write(175);
-    delay(200);
-    myservo_r.write(90);
+    cur_Flag = 1;
   }
   
   else if (!magnet_on_msg.data)
   {
-    myservo_l.write(5);                  // sets the servo position according to the scaled value
-    delay(200);
-    flag = 0;
-    current_status = 0;
-    myservo_l.write(90);
-    delay(50);
-    myservo_r.write(5);
-    delay(200);
-    myservo_r.write(90);
+    cur_Flag = 0;
   }
   
 }
@@ -82,10 +73,42 @@ void setup() {
     digitalWrite(13, LOW);
     delay(200);
   }
+  cur_time = millis();
+  prev_time = cur_time;
 }
 
 
 void loop() {
+  
+  // magnet part
+  cur_time = millis();
+  if(cur_Flag != prev_Flag) {
+    time_MAG = millis();
+    prev_Flag = cur_Flag;
+  }
+  if(cur_Flag == 0) { // Magnet OFF
+    if(cur_time - time_MAG < 50) {
+      myservo_l.write(5);
+      myservo_r.write(5);
+    }
+    else if(cur_time - time_MAG > 200) {
+      myservo_l.write(90);
+      myservo_r.write(90);
+    }
+  }
+  else if(cur_Flag == 1) { // Magnet ON
+    if(cur_time - time_MAG < 50) {
+      myservo_l.write(175);
+      myservo_r.write(175);
+    }
+    else if(cur_time - time_MAG > 200) {
+      myservo_l.write(90);
+      myservo_r.write(90);
+
+    }
+  }
+
+  // switch part
   int read_input_s1 = digitalRead(inputPin_s1);  // read input value
   int read_input_s2 = digitalRead(inputPin_s2);  // read input value
 
