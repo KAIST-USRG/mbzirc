@@ -50,7 +50,7 @@
 #include <tf/transform_broadcaster.h>
 
 
-#define DEBUG
+// #define DEBUG
 #define DELAY                 1.0         // for sleep function => robot updating states => 0.4 s fail (?)
 #define PLANNING_TIMEOUT      2
 #define NUM_SUM               3           // to average the pose message
@@ -215,7 +215,7 @@ public:
     // ========================  Node Communications
     // Publisher
     avg_pose_pub  = nh.advertise<geometry_msgs::Pose>("/avg_pose", 10);
-    magnet_state_pub = nh.advertise<std_msgs::Bool>("/magnet_on", 10);
+    magnet_state_pub = nh.advertise<std_msgs::Int32>("/magnet_on", 10);
     moveToDefault_finished_flag_pub = nh.advertise<std_msgs::Bool>("/moveToDefault_finish_flag", 10);
     readCamData_flag_pub = nh.advertise<std_msgs::Bool>("/readCamData_Flag", 10);
 
@@ -243,12 +243,11 @@ public:
     place_in_container_ss = nh.advertiseService("/place_in_container", &Arm::_placeInContainerServiceCallback, this);
     ur_move_ss = nh.advertiseService("ur_move", &Arm::urMoveCallback, this);
 
-
-    ros::Duration(1).sleep();
-    // Turn on Magnet
-    magnet_state_msg.data = true;
-    magnet_state_pub.publish(magnet_state_msg);
-    ROS_INFO("Initialize: MAGNET_ON");
+    // ros::Duration(1).sleep();
+    // // Turn on Magnet
+    // magnet_state_msg.data = true;
+    // magnet_state_pub.publish(magnet_state_msg);
+    // ROS_INFO("Initialize: MAGNET_ON");
 
     // DEBUG
     moveToStorageSide_flag_sub = nh.subscribe("/moveToStorageSide_flag", 10, &Arm::moveToStorageSideFlagCallback, this);
@@ -297,81 +296,81 @@ public:
     }
     
     
-    ROS_INFO("============== SERVICE CLIENT to Camera node: Visual Servo XY ==============");
-    {
-      // reset flag used in this Service
-      gb_servo_stop_signal = 0;
-      FLAG_XY_STOP = false;
-      visual_servo_XY_srv.request.waiting_for_data_XY = true;
-      visual_servo_XY_srv.request.brick_color_code = req.target_brick_color_code;
-      if(visual_servo_XY_sc.call(visual_servo_XY_srv))
-      {
-        std::cout << "visual_servo_XY_sc: Response : " << visual_servo_XY_srv.response.x << std::endl;
-        std::cout << "visual_servo_XY_sc: Response : " << visual_servo_XY_srv.response.y << std::endl;
-        float MAX_DIST = 1;
-        bool xy_success = moveXYZSlowly(visual_servo_XY_srv.response.x * MAX_DIST, 
-                                       visual_servo_XY_srv.response.y * MAX_DIST, 
-                                       0, 0.02, 0.02);
+    // ROS_INFO("============== SERVICE CLIENT to Camera node: Visual Servo XY ==============");
+    // {
+    //   // reset flag used in this Service
+    //   gb_servo_stop_signal = 0;
+    //   FLAG_XY_STOP = false;
+    //   visual_servo_XY_srv.request.waiting_for_data_XY = true;
+    //   visual_servo_XY_srv.request.brick_color_code = req.target_brick_color_code;
+    //   if(visual_servo_XY_sc.call(visual_servo_XY_srv))
+    //   {
+    //     std::cout << "visual_servo_XY_sc: Response : " << visual_servo_XY_srv.response.x << std::endl;
+    //     std::cout << "visual_servo_XY_sc: Response : " << visual_servo_XY_srv.response.y << std::endl;
+    //     float MAX_DIST = 1;
+    //     bool xy_success = moveXYZSlowly(visual_servo_XY_srv.response.x * MAX_DIST, 
+    //                                    visual_servo_XY_srv.response.y * MAX_DIST, 
+    //                                    0, 0.02, 0.02, true);
 
-        if (FLAG_XY_STOP != true) // cannot reach to the brick
-        {
-          ROS_INFO("Visual Servo XY: Cannot reach the brick");
-          res.workspace_reachable = false;
-          res.success_or_fail = false;   
-          return true;
-        }
+    //     if (FLAG_XY_STOP != true) // cannot reach to the brick
+    //     {
+    //       ROS_INFO("Visual Servo XY: Cannot reach the brick");
+    //       res.workspace_reachable = false;
+    //       res.success_or_fail = false;   
+    //       return true;
+    //     }
 
-      }else 
-      {  // fail to request service
-        std::cout << "visual_servo_XY_sc: Failed to call service" << std::endl;
-        return false;
-      }
-    }
+    //   }else 
+    //   {  // fail to request service
+    //     std::cout << "visual_servo_XY_sc: Failed to call service" << std::endl;
+    //     return false;
+    //   }
+    // }
 
     
-    ROS_INFO("================== Visual Servo yaw  ==================");
-    {
-      // reset flag used in this Service
-      FLAG_YAW_STOP = false;
-      visual_servo_yaw_srv.request.waiting_for_data_yaw = true;
-      visual_servo_yaw_srv.request.increase_margin = false;
-      while(true)
-      {
-        if(visual_servo_yaw_sc.call(visual_servo_yaw_srv))
-        {
-          if (FLAG_YAW_STOP == true)
-          {
-            std::cout << "No yaw needed"<< std::endl;
-            break;
-          }
+    // ROS_INFO("================== Visual Servo yaw  ==================");
+    // {
+    //   // reset flag used in this Service
+    //   FLAG_YAW_STOP = false;
+    //   visual_servo_yaw_srv.request.waiting_for_data_yaw = true;
+    //   visual_servo_yaw_srv.request.increase_margin = false;
+    //   while(true)
+    //   {
+    //     if(visual_servo_yaw_sc.call(visual_servo_yaw_srv))
+    //     {
+    //       if (FLAG_YAW_STOP == true)
+    //       {
+    //         std::cout << "No yaw needed"<< std::endl;
+    //         break;
+    //       }
 
-          std::cout << "visual_servo_yaw_sc: Response : " << visual_servo_yaw_srv.response.yaw << std::endl;
-          moveYawSlowly(LEFT, 0.05, 0.05);
-          if(FLAG_YAW_INCORRECT == true)
-          {
-            resetYaw();
-            moveYawSlowly(RIGHT, 0.05, 0.05);
-          }
+    //       std::cout << "visual_servo_yaw_sc: Response : " << visual_servo_yaw_srv.response.yaw << std::endl;
+    //       moveYawSlowly(LEFT, 0.05, 0.05);
+    //       if(FLAG_YAW_INCORRECT == true)
+    //       {
+    //         resetYaw();
+    //         moveYawSlowly(RIGHT, 0.05, 0.05);
+    //       }
 
-          if (FLAG_YAW_STOP == true) // cannot reach to the brick
-          {
-            break;
-          }else
-          {
-            visual_servo_yaw_srv.request.waiting_for_data_yaw = true;
-            visual_servo_yaw_srv.request.increase_margin = true;
-            resetYaw();
-          }
+    //       if (FLAG_YAW_STOP == true) // cannot reach to the brick
+    //       {
+    //         break;
+    //       }else
+    //       {
+    //         visual_servo_yaw_srv.request.waiting_for_data_yaw = true;
+    //         visual_servo_yaw_srv.request.increase_margin = true;
+    //         resetYaw();
+    //       }
           
 
-        }else 
-        {  // fail to request service
-          std::cout << "visual_servo_yaw_sc: Failed to call service" << std::endl;
-          return false;
-        }
-      }
+    //     }else 
+    //     {  // fail to request service
+    //       std::cout << "visual_servo_yaw_sc: Failed to call service" << std::endl;
+    //       return false;
+    //     }
+    //   }
       
-    }
+    // }
 
 
     ROS_INFO("====================== Trigger to read data from camera ======================");
@@ -480,16 +479,6 @@ public:
       ros::Duration(0.5).sleep();
       target_pose = move_group.getCurrentPose().pose;
 
-      // first way point
-      // target_pose.position.x = target_pose.position.x - 0.03;
-      // target_pose.position.y = target_pose.position.y + 0.03;
-      // target_pose.position.z = target_pose.position.z - (req.z / 2);
-      // waypoints_down.push_back(target_pose);
-
-      // second waypoint (target)
-      // target_pose.position.x = target_pose.position.x + 0.03;
-      // target_pose.position.y = target_pose.position.y - 0.03;
-      // target_pose.position.z = target_pose.position.z - (req.z / 2) + DIST_LIDAR_TO_MAGNET + Z_OFFSET;
       target_pose.position.z = 0.10;
       waypoints_down.push_back(target_pose);
 
@@ -546,7 +535,7 @@ public:
     while (true)
     {
       ROS_INFO("_goToBrickServiceCallback: Moving Down Slowly");
-      moveXYZSlowly(0, 0, -0.50, 0.04, 0.04); // continue to move down until the tactile sensor is triggered
+      moveXYZSlowly(0, 0, -0.50, 0.04, 0.04, false); // continue to move down until the tactile sensor is triggered
 
       if (FLAG_SWITCH_TOUCHED == true) // tactile sensor is triggered => stop
       {
@@ -559,7 +548,7 @@ public:
 
     //  ====================== Open magnet to make it stronger  ====================== //
     {
-      magnet_state_msg.data = true;
+      magnet_state_msg.data = 1;
       magnet_state_pub.publish(magnet_state_msg); // MAGNET ON
       ROS_INFO("_goToBrickServiceCallback: MAGNET_ON");
       ros::Duration(1.0).sleep();
@@ -714,10 +703,10 @@ public:
 
     //  ====================== turn off the magnet to detach the brick  ====================== //
     {
-      magnet_state_msg.data = false;
+      magnet_state_msg.data = 0;
       magnet_state_pub.publish(magnet_state_msg); // MAGNET OFF
       ROS_INFO("_placeInContainerServiceCallback: MAGNET_OFF");
-      ros::Duration(5).sleep();
+      ros::Duration(3).sleep();
       
       detachBrick();
       deleteObject();
@@ -742,6 +731,16 @@ public:
           if (fraction == 1.0)
             break;
         }
+        // ================================= modify the velocity of Cartesian path ================================= //
+        // First create a RobotTrajectory object
+        robot_trajectory::RobotTrajectory rt(move_group.getCurrentState()->getRobotModel(), "manipulator");
+        // Second get a RobotTrajectory from trajectory
+        rt.setRobotTrajectoryMsg(*move_group.getCurrentState(), trajectory_up_from_storage);
+        // Thrid create a IterativeParabolicTimeParameterization object
+        trajectory_processing::IterativeParabolicTimeParameterization iptp;
+        // Fourth compute computeTimeStamps
+        bool success = iptp.computeTimeStamps(rt, 0.3, 0.3);
+        rt.getRobotTrajectoryMsg(trajectory_up_from_storage);
         ROS_INFO_NAMED("tutorial", "trajectory_up_from_storage: Cartesian To Storage (%.2f%% achieved)", fraction * 100.0);
         cartesian_plan.trajectory_ = trajectory_up_from_storage;
 
@@ -757,9 +756,9 @@ public:
 
     //  ====================== turn the magnet on again  ====================== //
     {
-      magnet_state_msg.data = true;
-      magnet_state_pub.publish(magnet_state_msg); // MAGNET OFF
-      ROS_INFO("_placeInContainerServiceCallback: MAGNET_ON");
+      // magnet_state_msg.data = true;
+      // magnet_state_pub.publish(magnet_state_msg); // MAGNET OFF
+      // ROS_INFO("_placeInContainerServiceCallback: MAGNET_ON");
       return true;
       
     }
@@ -1185,7 +1184,7 @@ public:
   }
 
 
-  bool moveXYZSlowly(float X, float Y, float Z, float max_v_scaling, float max_a_scaling)
+  bool moveXYZSlowly(float X, float Y, float Z, float max_v_scaling, float max_a_scaling, bool isVisualServo)
   {
     /* This function moves the end_effector slowly in Cartesian plane
     *  The input XYZ is the distance with respect to UGV frame
@@ -1215,8 +1214,6 @@ public:
       if (fraction == 1.0)
         break;
     }
-    // if (fraction != 1.0)
-    //   return false;
 
     // ================================= modify the velocity of Cartesian path ================================= //
     // First create a RobotTrajectory object
@@ -1235,6 +1232,9 @@ public:
     #ifdef DEBUG
       visual_tools.prompt("Press 'next' to moveXYZSlowly");
     #endif
+
+    if (isVisualServo && FLAG_XY_STOP == true) // in the case that XY is already aligned before visual servo
+      return false;
 
     move_group.execute(cartesian_plan);
     return true;
@@ -1833,7 +1833,7 @@ public:
 
     //  ====================== turn off the magnet to detach the brick  ====================== //
     {
-      magnet_state_msg.data = false;
+      magnet_state_msg.data = 0;
       magnet_state_pub.publish(magnet_state_msg); // MAGNET OFF
       ROS_INFO("_placeInContainerServiceCallback: MAGNET_OFF");
       ros::Duration(5).sleep();
