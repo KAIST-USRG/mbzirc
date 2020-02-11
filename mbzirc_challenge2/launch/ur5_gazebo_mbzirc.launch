@@ -20,7 +20,7 @@
   </node>
 
   <!-- Initialize Serial node (Arduino Control)-->
-  <node name="mag_serial_node" pkg="mag_serial" type="mag_serial_node" respawn="false" output="screen"/>
+  <!-- <node name="mag_serial_node" pkg="mag_serial" type="mag_serial_node" respawn="false" output="screen"/> -->
 
   <!-- Initialize Arduino: Switch
   <node name="serial_node_switch" pkg="rosserial_python" type="serial_node.py" respawn="false" output="screen">

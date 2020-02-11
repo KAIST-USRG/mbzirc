@@ -21,8 +21,8 @@ int main(int argc, char** argv){
   goal.target_pose.header.frame_id = "odom";
   goal.target_pose.header.stamp = ros::Time::now();
 
-  goal.target_pose.pose.position.x = 200.0;
-  goal.target_pose.pose.position.x = 100.0;
+  goal.target_pose.pose.position.x = 337.0;
+  goal.target_pose.pose.position.x = 124.6;
   goal.target_pose.pose.orientation.w = 1.0;
 
   ROS_INFO("Sending goal");

@@ -86,10 +86,10 @@ int ref_index = 0;
 Mat vel_and_yawRate, GPS_data, mat_init_with_GPS;
 
 // 0~3 km/h is noisy at TRAM. So, threshold is 3.0 km/h
-double update_threshold_velocity = 1.4;
-double heading_update_threshold_speed_x = 1.2;
+double update_threshold_velocity = 0.4;
+double heading_update_threshold_speed_x = 1.0;
 double heading_update_threshold_speed_y = 0.1;
-double heading_update_threshold_angular_z = 0.05;
+double heading_update_threshold_angular_z = 0.01;
 
 double count_test = 0.0;
 

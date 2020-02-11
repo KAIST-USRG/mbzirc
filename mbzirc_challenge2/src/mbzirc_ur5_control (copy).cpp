@@ -38,7 +38,6 @@
 #include "mbzirc_msgs/place_in_container.h"
 #include "mbzirc_msgs/visual_servo_XY.h"
 #include "mbzirc_msgs/visual_servo_yaw.h"
-#include "mbzirc_msgs/drop_blanket.h"
 
 // msg
 #include <std_msgs/Bool.h>
@@ -58,8 +57,8 @@
 #define NUM_DISCARD           10
 #define DIST_EE_TO_MAGNET     0.077
 #define DIST_CAM_TO_EE        -0.015
-#define DIST_LIDAR_TO_MAGNET  0.06
-#define Z_OFFSET              0.07
+#define DIST_LIDAR_TO_MAGNET  0.04
+#define Z_OFFSET              0.02
 #define BELT_BASE_HEIGHT      0.26
 
 // color code
@@ -146,7 +145,7 @@ private:
   // msg
   std_msgs::Bool finish_stop_xy_msg;
   std_msgs::Bool finish_stop_yaw_msg;
-  
+  std_msgs::Bool magnet_state_msg;
   std_msgs::Bool moveToDefault_finished_flag_msg;
   std_msgs::Bool moveToDefault_flag_msg;
   std_msgs::Bool moveToStorageSide_finished_flag_msg;
@@ -154,8 +153,7 @@ private:
   std_msgs::Bool readCamData_flag_msg;
 
   std_msgs::Int16 box_count_msg;
-  std_msgs::Int32 magnet_on_msg;
-
+  
   geometry_msgs::Pose target_pose;
   geometry_msgs::Pose avg_pose_msg; // absolute position w.r.t UR5 base
   geometry_msgs::Point avg_Z_msg;
@@ -170,7 +168,6 @@ private:
   ros::ServiceServer go_to_brick_ss;
   ros::ServiceServer place_in_container_ss;
   ros::ServiceServer ur_move_ss;          // request is from mission_manager node
-  ros::ServiceServer drop_blanket_ss;
 
 
   // Service
@@ -178,7 +175,6 @@ private:
   mbzirc_msgs::place_in_container place_in_container_srv;
   mbzirc_msgs::visual_servo_XY visual_servo_XY_srv;
   mbzirc_msgs::visual_servo_yaw visual_servo_yaw_srv;
-  mbzirc_msgs::drop_blanket drop_blanket_srv;
 
   // Node Handle
   // ros::NodeHandle node_handle;
@@ -219,11 +215,13 @@ public:
     // ========================  Node Communications
     // Publisher
     avg_pose_pub  = nh.advertise<geometry_msgs::Pose>("/avg_pose", 10);
-    magnet_state_pub = nh.advertise<std_msgs::Int32>("/magnet_on", 10);
+    magnet_state_pub = nh.advertise<std_msgs::Bool>("/magnet_on", 10);
     moveToDefault_finished_flag_pub = nh.advertise<std_msgs::Bool>("/moveToDefault_finish_flag", 10);
     readCamData_flag_pub = nh.advertise<std_msgs::Bool>("/readCamData_Flag", 10);
 
+
     // Subscriber
+    
     manual_moveXVZ_sub = nh.subscribe("/manual_moveXVZ", 10, &Arm::manual_moveXYZ, this);
     moveToDefault_flag_sub = nh.subscribe("/moveToDefault_flag", 10, &Arm::moveToDafaultFlagCallback, this);
     plate_yaw_incorrect_sub = nh.subscribe("/ur5_rotation_incorrect", 1, &Arm::plateYawIncorrectCallback, this);
@@ -243,63 +241,27 @@ public:
     // Service Server
     go_to_brick_ss = nh.advertiseService("/go_to_brick", &Arm::_goToBrickServiceCallback, this);
     place_in_container_ss = nh.advertiseService("/place_in_container", &Arm::_placeInContainerServiceCallback, this);
-    ur_move_ss = nh.advertiseService("ur_move", &Arm::urMoveServiceCallback, this);
-    drop_blanket_ss = nh.advertiseService("/ur_drop_blanket", &Arm::urDropBlanketServiceCallback, this);
+    ur_move_ss = nh.advertiseService("ur_move", &Arm::urMoveCallback, this);
+
+
+    ros::Duration(1).sleep();
+    // Turn on Magnet
+    magnet_state_msg.data = true;
+    magnet_state_pub.publish(magnet_state_msg);
+    ROS_INFO("Initialize: MAGNET_ON");
 
     // DEBUG
     moveToStorageSide_flag_sub = nh.subscribe("/moveToStorageSide_flag", 10, &Arm::moveToStorageSideFlagCallback, this);
   }
 
   // ==================== Service Callback Function ==================== //
-  bool urDropBlanketServiceCallback(mbzirc_msgs::drop_blanket::Request  &req,
-                       mbzirc_msgs::drop_blanket::Response  &res)
-  {
-    /*  To drop the blanket on the simulated fire target
-    */
-    if (req.need_to_drop_blanket == false)
-    {
-      res.success_or_fail = false;
-      return true;
-    }
-    else
-    {
-      ROS_INFO("=============== Adjust Default Position ===============");
-      {
-        moveToDefault(RIGHT);
-      }
-
-      ROS_INFO("=============== Move EE to the start point of the mission ===============");
-      {
-        moveTo(-0.11, 0.30, 0.30, 0.3, 0.3);
-      }
-
-      ROS_INFO("=============== Drop blanket action 1 ===============");
-      {
-        // Do something
-      }
-
-      ROS_INFO("=============== Move EE toward the end point of the mission ===============");
-      {
-        moveXYZSlowly(0, 0.55, 0.0, 0.3, 0.3, false);
-      }
-
-      ROS_INFO("=============== Drop blanket action 2 ===============");
-      {
-        // Do something
-      }
-      res.success_or_fail = true;
-      return true;
-    }
-  }
-
-
-  bool urMoveServiceCallback(mbzirc_msgs::ur_move::Request  &req,
+  bool urMoveCallback(mbzirc_msgs::ur_move::Request  &req,
                        mbzirc_msgs::ur_move::Response  &res)
   {    
     /*  The service server to communicate with mission_manager (central planner)
     */
 
-    ROS_INFO("=============== Adjust Default Position  ===============");
+    ROS_INFO("========== Adjust Default Position According to the target container side ==========");
     {
       moveToDefault(RIGHT);
 
@@ -310,15 +272,10 @@ public:
       // Next get the current set of joint values for the group.
       std::vector<double> joint_group_positions;
       current_state->copyJointGroupPositions(joint_model_group, joint_group_positions);
-      joint_group_positions[0] = PI;  // Radian
-      joint_group_positions[1] = -PI/2;
-      joint_group_positions[2] = PI/180*60;
-      joint_group_positions[3] = 2 * PI - PI/180 * 60;
       joint_group_positions[4] = -PI/2;
-      joint_group_positions[5] = 0;
       move_group.setJointValueTarget(joint_group_positions);
-      move_group.setMaxVelocityScalingFactor(0.01);
-      move_group.setMaxAccelerationScalingFactor(0.01);
+      move_group.setMaxVelocityScalingFactor(0.001);
+      move_group.setMaxAccelerationScalingFactor(0.001);
       move_group.setPlanningTime(PLANNING_TIMEOUT);
       move_group.setGoalJointTolerance(0.00000001);
 
@@ -335,81 +292,75 @@ public:
     }
     
     
-    // ROS_INFO("============== SERVICE CLIENT to Camera node: Visual Servo XY ==============");
-    // {
-    //   // reset flag used in this Service
-    //   gb_servo_stop_signal = 0;
-    //   FLAG_XY_STOP = false;
-    //   visual_servo_XY_srv.request.waiting_for_data_XY = true;
-    //   visual_servo_XY_srv.request.brick_color_code = req.target_brick_color_code;
-    //   if(visual_servo_XY_sc.call(visual_servo_XY_srv))
-    //   {
-    //     std::cout << "visual_servo_XY_sc: Response : " << visual_servo_XY_srv.response.x << std::endl;
-    //     std::cout << "visual_servo_XY_sc: Response : " << visual_servo_XY_srv.response.y << std::endl;
-    //     float MAX_DIST = 1;
-    //     bool xy_success = moveXYZSlowly(visual_servo_XY_srv.response.x * MAX_DIST, 
-    //                                    visual_servo_XY_srv.response.y * MAX_DIST, 
-    //                                    0, 0.02, 0.02, true);
+    ROS_INFO("============== SERVICE CLIENT to Camera node: Visual Servo XY ==============");
+    {
+      // reset flag used in this Service
+      gb_servo_stop_signal = 0;
+      FLAG_XY_STOP = false;
+      visual_servo_XY_srv.request.waiting_for_data_XY = true;
+      visual_servo_XY_srv.request.brick_color_code = req.target_brick_color_code;
+      if(visual_servo_XY_sc.call(visual_servo_XY_srv))
+      {
+        std::cout << "visual_servo_XY_sc: Response : " << visual_servo_XY_srv.response.x << std::endl;
+        std::cout << "visual_servo_XY_sc: Response : " << visual_servo_XY_srv.response.y << std::endl;
+        float MAX_DIST = 1;
+        bool xy_success = moveXYZSlowly(visual_servo_XY_srv.response.x * MAX_DIST, 
+                                       visual_servo_XY_srv.response.y * MAX_DIST, 
+                                       0, 0.05, 0.05);
 
-    //     if (FLAG_XY_STOP != true) // cannot reach to the brick
-    //     {
-    //       ROS_INFO("Visual Servo XY: Cannot reach the brick");
-    //       res.workspace_reachable = false;
-    //       res.success_or_fail = false;   
-    //       return true;
-    //     }
+        if (FLAG_XY_STOP != true) // cannot reach to the brick
+        {
+          ROS_INFO("Visual Servo XY: Cannot reach the brick");
+          res.workspace_reachable = false;
+          res.success_or_fail = false;   
+          return true;
+        }
 
-    //   }else 
-    //   {  // fail to request service
-    //     std::cout << "visual_servo_XY_sc: Failed to call service" << std::endl;
-    //     return false;
-    //   }
-    // }
+      }else 
+      {  // fail to request service
+        std::cout << "visual_servo_XY_sc: Failed to call service" << std::endl;
+        return false;
+      }
+    }
 
     
-    // ROS_INFO("================== Visual Servo yaw  ==================");
-    // {
-    //   // reset flag used in this Service
-    //   FLAG_YAW_STOP = false;
-    //   visual_servo_yaw_srv.request.waiting_for_data_yaw = true;
-    //   visual_servo_yaw_srv.request.increase_margin = false;
-    //   while(true)
-    //   {
-    //     if(visual_servo_yaw_sc.call(visual_servo_yaw_srv))
-    //     {
-    //       if (FLAG_YAW_STOP == true)
-    //       {
-    //         std::cout << "No yaw needed"<< std::endl;
-    //         break;
-    //       }
+    ROS_INFO("================== Visual Servo yaw  ==================");
+    {
+      // reset flag used in this Service
+      FLAG_YAW_STOP = false;
+      visual_servo_yaw_srv.request.waiting_for_data_yaw = true;
+      visual_servo_yaw_srv.request.increase_margin = false;
+      while(true)
+      {
+        if(visual_servo_yaw_sc.call(visual_servo_yaw_srv))
+        {
+          std::cout << "visual_servo_yaw_sc: Response : " << visual_servo_yaw_srv.response.yaw << std::endl;
+          moveYawSlowly(LEFT, 0.05, 0.05);
+          if(FLAG_YAW_INCORRECT == true)
+          {
+            resetYaw();
+            moveYawSlowly(RIGHT, 0.05, 0.05);
+          }
 
-    //       std::cout << "visual_servo_yaw_sc: Response : " << visual_servo_yaw_srv.response.yaw << std::endl;
-    //       moveYawSlowly(LEFT, 0.05, 0.05);
-    //       if(FLAG_YAW_INCORRECT == true)
-    //       {
-    //         resetYaw();
-    //         moveYawSlowly(RIGHT, 0.05, 0.05);
-    //       }
-
-    //       if (FLAG_YAW_STOP == true) // cannot reach to the brick
-    //       {
-    //         break;
-    //       }else
-    //       {
-    //         visual_servo_yaw_srv.request.waiting_for_data_yaw = true;
-    //         visual_servo_yaw_srv.request.increase_margin = true;
-    //         resetYaw();
-    //       }
+          if (FLAG_YAW_STOP == true) // cannot reach to the brick
+          {
+            break;
+          }else
+          {
+            visual_servo_yaw_srv.request.waiting_for_data_yaw = true;
+            visual_servo_yaw_srv.request.increase_margin = true;
+            resetYaw();
+          }
           
 
-    //     }else 
-    //     {  // fail to request service
-    //       std::cout << "visual_servo_yaw_sc: Failed to call service" << std::endl;
-    //       return false;
-    //     }
-    //   }
+        }else 
+        {  // fail to request service
+          std::cout << "visual_servo_yaw_sc: Failed to call service" << std::endl;
+          return false;
+        }
+      }
       
-    // }
+    }
 
 
     ROS_INFO("====================== Trigger to read data from camera ======================");
@@ -475,16 +426,15 @@ public:
       if(place_in_container_sc.call(place_in_container_srv)) 
       {
         std::cout << "place_in_container_sc: Response : " << place_in_container_srv.response.success << std::endl;
+        return true;
       }
       else {  // fail to request service
         std::cout << "place_in_container_sc: Failed to call service" << std::endl;
         return false;
       }
+    
+      return true;
     }
-
-    // All the services proceeded correctly
-    res.workspace_reachable = true;
-    res.success_or_fail = true;  
     return true;
   }
 
@@ -518,7 +468,16 @@ public:
       ros::Duration(0.5).sleep();
       target_pose = move_group.getCurrentPose().pose;
 
-      target_pose.position.z = 0.10;
+      // first way point
+      // target_pose.position.x = target_pose.position.x - 0.03;
+      // target_pose.position.y = target_pose.position.y + 0.03;
+      target_pose.position.z = target_pose.position.z - (req.z / 2);
+      waypoints_down.push_back(target_pose);
+
+      // second waypoint (target)
+      // target_pose.position.x = target_pose.position.x + 0.03;
+      // target_pose.position.y = target_pose.position.y - 0.03;
+      target_pose.position.z = target_pose.position.z - (req.z / 2) + DIST_LIDAR_TO_MAGNET + DIST_EE_TO_MAGNET + Z_OFFSET;
       waypoints_down.push_back(target_pose);
 
       move_group.setPlanningTime(PLANNING_TIMEOUT);
@@ -548,7 +507,7 @@ public:
       // Thrid create a IterativeParabolicTimeParameterization object
       trajectory_processing::IterativeParabolicTimeParameterization iptp;
       // Fourth compute computeTimeStamps
-      bool success = iptp.computeTimeStamps(rt, 0.2, 0.2);
+      bool success = iptp.computeTimeStamps(rt, 0.3, 0.3);
       rt.getRobotTrajectoryMsg(trajectory_down);
       ROS_INFO_NAMED("tutorial", "_goToBrickServiceCallback: Step 2: Move close to the brick (%.2f%% achieved)", fraction * 100.0);
 
@@ -574,7 +533,7 @@ public:
     while (true)
     {
       ROS_INFO("_goToBrickServiceCallback: Moving Down Slowly");
-      moveXYZSlowly(0, 0, -0.50, 0.02, 0.02, false); // continue to move down until the tactile sensor is triggered
+      moveXYZSlowly(0, 0, -0.15, 0.02, 0.02); // continue to move down until the tactile sensor is triggered
 
       if (FLAG_SWITCH_TOUCHED == true) // tactile sensor is triggered => stop
       {
@@ -587,8 +546,8 @@ public:
 
     //  ====================== Open magnet to make it stronger  ====================== //
     {
-      magnet_on_msg.data = 1;
-      magnet_state_pub.publish(magnet_on_msg); // MAGNET ON
+      magnet_state_msg.data = true;
+      magnet_state_pub.publish(magnet_state_msg); // MAGNET ON
       ROS_INFO("_goToBrickServiceCallback: MAGNET_ON");
       ros::Duration(1.0).sleep();
       attachBrick(req.brick_color_code);
@@ -604,6 +563,25 @@ public:
       // Next get the current set of joint values for the group.
       current_state->copyJointGroupPositions(joint_model_group, joint_group_positions);
 
+
+      // if (req.container_side == LEFT)
+      // {
+        // joint_group_positions[0] = 0;  // Radian
+        // joint_group_positions[1] = -PI/2;
+        // joint_group_positions[2] = -PI/180*15;
+        // joint_group_positions[3] = PI + PI/180 * 15;
+        // joint_group_positions[4] = PI/2;
+        // joint_group_positions[5] = 0;
+      // }
+      // else
+      // {
+        // joint_group_positions[0] = PI;  // Radian
+        // joint_group_positions[1] = -PI/2;
+        // joint_group_positions[2] = PI/180 * 15;
+        // joint_group_positions[3] = 2 * PI - PI/180 * 15;
+        // joint_group_positions[4] = -PI/2;
+        // joint_group_positions[5] = 0;
+      // }
       joint_group_positions[0] = PI;  // Radian
       joint_group_positions[1] = -PI/2;
       joint_group_positions[2] = PI/180 * 45;
@@ -660,8 +638,8 @@ public:
       move_group.setJointValueTarget(joint_group_positions);
       move_group.setPlanningTime(PLANNING_TIMEOUT);
       move_group.setGoalJointTolerance(0.01);
-      move_group.setMaxVelocityScalingFactor(0.3);
-      move_group.setMaxAccelerationScalingFactor(0.3);
+      move_group.setMaxVelocityScalingFactor(0.4);
+      move_group.setMaxAccelerationScalingFactor(0.4);
 
       bool success{move_group.plan(my_plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS};
       ROS_INFO_NAMED("tutorial", "moveToStorageSide Step 2: Turn %s", success ? "SUCCEEDED" : "FAILED");
@@ -675,55 +653,30 @@ public:
     }
 
     //  ====================== go to the container  ====================== //
+    std::vector<geometry_msgs::Pose> waypoints_to_storage;
     {
-      std::vector<geometry_msgs::Pose> waypoints_to_storage;
       target_pose = move_group.getCurrentPose().pose; // Cartesian Path from the current position
       ros::Duration(0.5).sleep();
       target_pose = move_group.getCurrentPose().pose; // Cartesian Path from the current position
 
       if (req.brick_container_side == LEFT)
       {
-        target_pose.position.x = -0.565;
+        target_pose.position.x = -0.56;
         target_pose.position.y = -0.1;
-        // target_pose.position.z = 0.75;
+        target_pose.position.z = 0.65;
       }else
       {
-        target_pose.position.x = 0.565;
+        target_pose.position.x = 0.56;
         target_pose.position.y = 0.1;
-        // target_pose.position.z = 0.75;
+        target_pose.position.z = 0.65;
       }
 
-      // waypoints_to_storage.push_back(target_pose);
+      waypoints_to_storage.push_back(target_pose);
       
-      if (req.order_of_this_brick == 1)
-      {
-        target_pose.position.z = 0.40;
-        waypoints_to_storage.push_back(target_pose);
-        target_pose.position.z = 0;
-        waypoints_to_storage.push_back(target_pose);
-      }else if (req.order_of_this_brick == 2)
-      {
-        target_pose.position.z = 0.40;
-        waypoints_to_storage.push_back(target_pose);
-        target_pose.position.z = 0.15;
-        waypoints_to_storage.push_back(target_pose);
-      }else if (req.order_of_this_brick == 3)
-      {
-        target_pose.position.z = 0.60;
-        waypoints_to_storage.push_back(target_pose);
-        target_pose.position.z = 0.35;
-        waypoints_to_storage.push_back(target_pose);
-      }else if (req.order_of_this_brick == 4)
-      {
-        target_pose.position.z = 0.60;
-        waypoints_to_storage.push_back(target_pose);
-        target_pose.position.z = 0.55;
-        waypoints_to_storage.push_back(target_pose);
-      }else if (req.order_of_this_brick == 5)
-      {
-        // Do nothing
-      }
-      
+      target_pose.position.z = (req.order_of_this_brick  - 1) * 0.22;
+      ROS_INFO("z = %lf", target_pose.position.z);
+
+      waypoints_to_storage.push_back(target_pose);
 
       move_group.setMaxVelocityScalingFactor(0.2);
       move_group.setMaxAccelerationScalingFactor(0.2);
@@ -744,7 +697,7 @@ public:
       // Thrid create a IterativeParabolicTimeParameterization object
       trajectory_processing::IterativeParabolicTimeParameterization iptp;
       // Fourth compute computeTimeStamps
-      bool success = iptp.computeTimeStamps(rt, 0.1, 0.1);
+      bool success = iptp.computeTimeStamps(rt, 0.2, 0.2);
       rt.getRobotTrajectoryMsg(trajectory_to_storage);
 
       ROS_INFO_NAMED("tutorial", "moveToStorageSide Step 4: Cartesian To Storage (%.2f%% achieved)", fraction * 100.0);
@@ -767,51 +720,16 @@ public:
 
     //  ====================== turn off the magnet to detach the brick  ====================== //
     {
-      magnet_on_msg.data = 0;
-      magnet_state_pub.publish(magnet_on_msg); // MAGNET OFF
+      magnet_state_msg.data = false;
+      magnet_state_pub.publish(magnet_state_msg); // MAGNET OFF
+      ros::Duration(5).sleep();
       ROS_INFO("_placeInContainerServiceCallback: MAGNET_OFF");
-      ros::Duration(3).sleep();
-      
       detachBrick();
       deleteObject();
     }
 
     //  ====================== move back to the default position  ====================== //
     {
-      if (req.order_of_this_brick == 1 || req.order_of_this_brick == 2)
-      {
-        std::vector<geometry_msgs::Pose> waypoints_up_from_storage;
-        target_pose = move_group.getCurrentPose().pose; // Cartesian Path from the current position
-        ros::Duration(0.5).sleep();
-        target_pose = move_group.getCurrentPose().pose; // Cartesian Path from the current position
-        target_pose.position.z = 0.30;
-        waypoints_up_from_storage.push_back(target_pose);
-        move_group.execute(cartesian_plan);
-        move_group.setPlanningTime(PLANNING_TIMEOUT);
-        moveit_msgs::RobotTrajectory trajectory_up_from_storage;
-        for(int i = 0; i < 3; i++)
-        {
-          fraction = move_group.computeCartesianPath(waypoints_up_from_storage, eef_step, jump_threshold, trajectory_up_from_storage);
-          if (fraction == 1.0)
-            break;
-        }
-        // ================================= modify the velocity of Cartesian path ================================= //
-        // First create a RobotTrajectory object
-        robot_trajectory::RobotTrajectory rt(move_group.getCurrentState()->getRobotModel(), "manipulator");
-        // Second get a RobotTrajectory from trajectory
-        rt.setRobotTrajectoryMsg(*move_group.getCurrentState(), trajectory_up_from_storage);
-        // Thrid create a IterativeParabolicTimeParameterization object
-        trajectory_processing::IterativeParabolicTimeParameterization iptp;
-        // Fourth compute computeTimeStamps
-        bool success = iptp.computeTimeStamps(rt, 0.3, 0.3);
-        rt.getRobotTrajectoryMsg(trajectory_up_from_storage);
-        ROS_INFO_NAMED("tutorial", "trajectory_up_from_storage: Cartesian To Storage (%.2f%% achieved)", fraction * 100.0);
-        cartesian_plan.trajectory_ = trajectory_up_from_storage;
-
-        move_group.execute(cartesian_plan);
-      }
-      
-
       moveToDefault(RIGHT);
       
       moveToDefault_finished_flag_msg.data = true;
@@ -820,10 +738,9 @@ public:
 
     //  ====================== turn the magnet on again  ====================== //
     {
-      // magnet_on_msg.data = true;
-      // magnet_state_pub.publish(magnet_on_msg); // MAGNET OFF
-      // ROS_INFO("_placeInContainerServiceCallback: MAGNET_ON");
-      return true;
+      magnet_state_msg.data = true;
+      magnet_state_pub.publish(magnet_state_msg); // MAGNET OFF
+      ROS_INFO("_placeInContainerServiceCallback: MAGNET_ON");
       
     }
   }
@@ -923,27 +840,24 @@ public:
         ROS_INFO("calcAvgCallback: Accumulate the data");
         // gb_x_sum += msg->position.x;
         // gb_y_sum += msg->position.y;
-        if(msg->range > 1.085)
-        {
-          gb_z_sum += 1.085;
-        }else
-        {
-          gb_z_sum += msg->range;
-        }
+        gb_z_sum += msg->range;
+        // gb_xq_sum += msg->orientation.x;
+        // gb_yq_sum += msg->orientation.y;
+        // gb_zq_sum += msg->orientation.z;
+        // gb_wq_sum += msg->orientation.w;
+
         gb_count_pose_msg += 1;
 
       }else{ // picking up should start from DEFAULT position
-        // int n = NUM_SUM;
-        
-        avg_pose_msg.position.x = gb_x_sum/NUM_SUM;
-        avg_pose_msg.position.y = gb_y_sum/NUM_SUM;
-        avg_pose_msg.position.z = gb_z_sum/NUM_SUM;
-        
-        
-        avg_pose_msg.orientation.x = gb_xq_sum/NUM_SUM;
-        avg_pose_msg.orientation.y = gb_yq_sum/NUM_SUM;
-        avg_pose_msg.orientation.z = gb_zq_sum/NUM_SUM;
-        avg_pose_msg.orientation.w = gb_wq_sum/NUM_SUM;
+        int n = NUM_SUM;
+
+        avg_pose_msg.position.x = gb_x_sum/n;
+        avg_pose_msg.position.y = gb_y_sum/n;
+        avg_pose_msg.position.z = gb_z_sum/n;
+        avg_pose_msg.orientation.x = gb_xq_sum/n;
+        avg_pose_msg.orientation.y = gb_yq_sum/n;
+        avg_pose_msg.orientation.z = gb_zq_sum/n;
+        avg_pose_msg.orientation.w = gb_wq_sum/n;
         ROS_INFO("calcAvgCallback: x = %lf, y = %lf, z = %lf", avg_pose_msg.position.x, avg_pose_msg.position.y, avg_pose_msg.position.z);
 
         avg_pose_pub.publish(avg_pose_msg);
@@ -1035,11 +949,9 @@ public:
       move_group.stop();
       if (gb_servo_stop_signal == 0)  // first stop from cam node is XY
       {
-        ROS_INFO("XXXXXXXXXXXXXXXX set flag stop xy to true");
         FLAG_XY_STOP = true;
       }else if (gb_servo_stop_signal == 1)
       {
-        ROS_INFO("XXXXXXXXXXXXXXXX set flag stop yaw to true");
         FLAG_YAW_STOP = true;
       }else{
         // cannot reach here
@@ -1054,7 +966,7 @@ public:
   }
 
 
-  void switchStateCallback(const std_msgs::Int32::ConstPtr& msg)
+  void switchStateCallback(const std_msgs::Bool::ConstPtr& msg)
   {
     /*  switch always publish 1 if untouched
     *   if either of the switch is touched => publish 0 => the robot arm's motion should stop
@@ -1192,64 +1104,6 @@ public:
     move_group.execute(cartesian_plan);
   }
 
-  void moveTo(float toX, float toY, float toZ, float max_v_scaling, float max_a_scaling)
-  {
-    /*  Move the end_effector of UR5 to the target point w.r.t UGV frame
-    *   INPUT: x, y, z point w.r.t UGV axis
-    */
-
-    std::vector<geometry_msgs::Pose> waypoints_down;
-    target_pose = move_group.getCurrentPose().pose; // Cartesian Path from the current position
-    ros::Duration(0.5).sleep();
-    target_pose = move_group.getCurrentPose().pose; // Cartesian Path from the current position
-
-    target_pose.position.x = toX;
-
-    // Measure DIST_CAM_TO_EE, see CONSTANT part => read bricks' position from camera, but we want to move EE to the brick
-    target_pose.position.y = toY;
-    // Measure DIST_CAM_TO_EE, see CONSTANT part
-    target_pose.position.z = toZ;
-    waypoints_down.push_back(target_pose);
-
-
-    move_group.setMaxVelocityScalingFactor(0.4);
-    move_group.setMaxAccelerationScalingFactor(0.4);
-    move_group.setPlanningTime(PLANNING_TIMEOUT);
-
-
-    moveit_msgs::RobotTrajectory trajectory_down;
-    for(int i = 0; i < 3; i++)
-    {
-      fraction = move_group.computeCartesianPath(waypoints_down, eef_step, jump_threshold, trajectory_down);
-      if (fraction == 1.0)
-        break;
-    }
-    // ================================= modify the velocity of Cartesian path ================================= //
-    // First create a RobotTrajectory object
-    robot_trajectory::RobotTrajectory rt(move_group.getCurrentState()->getRobotModel(), "manipulator");
-    // Second get a RobotTrajectory from trajectory
-    rt.setRobotTrajectoryMsg(*move_group.getCurrentState(), trajectory_down);
-    // Thrid create a IterativeParabolicTimeParameterization object
-    trajectory_processing::IterativeParabolicTimeParameterization iptp;
-    // Fourth compute computeTimeStamps
-    bool success = iptp.computeTimeStamps(rt, max_v_scaling, max_a_scaling);
-    rt.getRobotTrajectoryMsg(trajectory_down);
-
-    ROS_INFO_NAMED("tutorial", "moveXYZSlowly (%.2f%% achieved)", fraction * 100.0);
-    cartesian_plan.trajectory_ = trajectory_down;
-
-    ROS_INFO_NAMED("tutorial", "moveTo: CartesianPath (%.2f%% achieved)", fraction * 100.0);
-    cartesian_plan.trajectory_ = trajectory_down;
-
-
-    #ifdef DEBUG
-      visual_tools.prompt("Press 'next' to go down");
-      // ros::Duration(DELAY).sleep();
-    #endif
-
-    move_group.execute(cartesian_plan);
-  }
-
 
   void moveToDefault(int mode)
   {
@@ -1286,8 +1140,8 @@ public:
     
 
     move_group.setJointValueTarget(joint_group_positions);
-    move_group.setMaxVelocityScalingFactor(0.25);
-    move_group.setMaxAccelerationScalingFactor(0.25);
+    move_group.setMaxVelocityScalingFactor(0.4);
+    move_group.setMaxAccelerationScalingFactor(0.4);
     move_group.setPlanningTime(PLANNING_TIMEOUT);
     move_group.setGoalJointTolerance(0.01);
 
@@ -1295,9 +1149,9 @@ public:
     bool success{move_group.plan(my_plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS};
     ROS_INFO_NAMED("tutorial", "moveToDefault: %s", success ? "SUCCEEDED" : "FAILED");
 
-    // #ifdef DEBUG
-    //   visual_tools.prompt("Press 'next' to front position");
-    // #endif
+    #ifdef DEBUG
+      visual_tools.prompt("Press 'next' to front position");
+    #endif
 
     move_group.move();                      // BLOCKING FUNCTION
     moveToDefault_finished_flag_msg.data = true;
@@ -1306,7 +1160,7 @@ public:
   }
 
 
-  bool moveXYZSlowly(float X, float Y, float Z, float max_v_scaling, float max_a_scaling, bool isVisualServo)
+  bool moveXYZSlowly(float X, float Y, float Z, float max_v_scaling, float max_a_scaling)
   {
     /* This function moves the end_effector slowly in Cartesian plane
     *  The input XYZ is the distance with respect to UGV frame
@@ -1336,6 +1190,8 @@ public:
       if (fraction == 1.0)
         break;
     }
+    // if (fraction != 1.0)
+    //   return false;
 
     // ================================= modify the velocity of Cartesian path ================================= //
     // First create a RobotTrajectory object
@@ -1355,9 +1211,6 @@ public:
       visual_tools.prompt("Press 'next' to moveXYZSlowly");
     #endif
 
-    if (isVisualServo && FLAG_XY_STOP == true) // in the case that XY is already aligned before visual servo
-      return false;
-
     move_group.execute(cartesian_plan);
     return true;
   }
@@ -1368,8 +1221,6 @@ public:
     /* This function yaws the end_effector slowly in Cartesian plane
     *  + rad: left, - rad : right
     */
-    if(FLAG_YAW_STOP == true)
-      return;
     current_state = move_group.getCurrentState();
     ros::Duration(0.5).sleep();
     current_state = move_group.getCurrentState();
@@ -1391,12 +1242,10 @@ public:
     bool success{move_group.plan(my_plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS};
     ROS_INFO_NAMED("tutorial", "moveYawSlowly %s", success ? "SUCCEEDED" : "FAILED");
 
-    // #ifdef DEBUG
-    //   visual_tools.prompt("Press 'next' to front position");
-    // #endif
+    #ifdef DEBUG
+      visual_tools.prompt("Press 'next' to front position");
+    #endif
 
-    if(FLAG_YAW_STOP == true)
-      return;
     move_group.move();                      // BLOCKING FUNCTION
   }
 
@@ -1423,9 +1272,9 @@ public:
     bool success{move_group.plan(my_plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS};
     ROS_INFO_NAMED("tutorial", "resetYaw: moving back to default yaw %s", success ? "SUCCEEDED" : "FAILED");
 
-    // #ifdef DEBUG
-    //   visual_tools.prompt("Press 'next' to front position");
-    // #endif
+    #ifdef DEBUG
+      visual_tools.prompt("Press 'next' to front position");
+    #endif
 
     move_group.move();                      // BLOCKING FUNCTION
   }
@@ -1832,7 +1681,7 @@ public:
     // Thrid create a IterativeParabolicTimeParameterization object
     trajectory_processing::IterativeParabolicTimeParameterization iptp;
     // Fourth compute computeTimeStamps
-    bool success = iptp.computeTimeStamps(rt, 0.1, 0.1);
+    bool success = iptp.computeTimeStamps(rt, 0.3, 0.3);
     rt.getRobotTrajectoryMsg(trajectory_down);
     ROS_INFO_NAMED("tutorial", "manual_moveXYZ CartesianPath (%.2f%% achieved)", fraction * 100.0);
     cartesian_plan.trajectory_ = trajectory_down;
@@ -1866,152 +1715,78 @@ public:
 
   void moveToStorageSide_DEBUG(uint box_count)
   {
+    // Get the current set of joint values for the group.
     std::vector<double> joint_group_positions;
     current_state->copyJointGroupPositions(joint_model_group, joint_group_positions);
 
-    //  ====================== Turn the robot arm to the correct container side  ====================== //
+    // STEP2: Turn Left (UGV view)
+    current_state = move_group.getCurrentState();
+    ros::Duration(0.5).sleep();
+    current_state = move_group.getCurrentState();
+    current_state->copyJointGroupPositions(joint_model_group, joint_group_positions);
+
+    joint_group_positions[0] = 3*PI/2;  // Radian rotate 90 from Default Position
+
+    move_group.setJointValueTarget(joint_group_positions);
+    move_group.setPlanningTime(PLANNING_TIMEOUT);
+    move_group.setGoalJointTolerance(0.01);
+    move_group.setMaxVelocityScalingFactor(0.1);
+    move_group.setMaxAccelerationScalingFactor(0.1);
+    
+    bool success{move_group.plan(my_plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS};
+    ROS_INFO_NAMED("tutorial", "moveToStorageSide Step 2: Turn left %s", success ? "SUCCEEDED" : "FAILED");
+
+    #ifdef DEBUG
+      visual_tools.prompt("Press 'next' to front position");
+    #endif
+
+    move_group.move();                      // BLOCKING FUNCTION
+
+    // STEP4: Go to the storage
+
+    std::vector<geometry_msgs::Pose> waypoints_to_storage;
+
+    target_pose = move_group.getCurrentPose().pose; // Cartesian Path from the current position
+    ros::Duration(0.5).sleep();
+    target_pose = move_group.getCurrentPose().pose; // Cartesian Path from the current position
+
+    target_pose.position.x = -0.56;
+    target_pose.position.y = -0.1;
+    target_pose.position.z = 0.65;
+
+    waypoints_to_storage.push_back(target_pose);
+
+    target_pose.position.z = (box_count - 1) * 0.22;
+
+    waypoints_to_storage.push_back(target_pose);
+
+    move_group.setMaxVelocityScalingFactor(0.01);
+    move_group.setMaxAccelerationScalingFactor(0.01);
+    move_group.setPlanningTime(PLANNING_TIMEOUT);
+
+    moveit_msgs::RobotTrajectory trajectory_to_storage;
+    for(int i = 0; i < 3; i++)
     {
-      current_state = move_group.getCurrentState();
-      ros::Duration(0.5).sleep();
-      current_state = move_group.getCurrentState();
-      current_state->copyJointGroupPositions(joint_model_group, joint_group_positions);
-
-      joint_group_positions[0] = 3 * PI/2; // Turn UR toward the container LEFT side
-
-      move_group.setJointValueTarget(joint_group_positions);
-      move_group.setPlanningTime(PLANNING_TIMEOUT);
-      move_group.setGoalJointTolerance(0.01);
-      move_group.setMaxVelocityScalingFactor(0.3);
-      move_group.setMaxAccelerationScalingFactor(0.3);
-
-      bool success{move_group.plan(my_plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS};
-      ROS_INFO_NAMED("tutorial", "moveToStorageSide Step 2: Turn %s", success ? "SUCCEEDED" : "FAILED");
-
-
-      #ifdef DEBUG
-        visual_tools.prompt("Press 'next' to front position");
-      #endif
-
-      move_group.move();                      // BLOCKING FUNCTION
+      fraction = move_group.computeCartesianPath(waypoints_to_storage, eef_step, jump_threshold, trajectory_to_storage);
+      if (fraction == 1.0)
+        break;
     }
+    ROS_INFO_NAMED("tutorial", "moveToStorageSide Step 4: Cartesian To Storage (%.2f%% achieved)", fraction * 100.0);
+    cartesian_plan.trajectory_ = trajectory_to_storage;
 
-    //  ====================== go to the container  ====================== //
-    {
-      std::vector<geometry_msgs::Pose> waypoints_to_storage;
-      target_pose = move_group.getCurrentPose().pose; // Cartesian Path from the current position
-      ros::Duration(0.5).sleep();
-      target_pose = move_group.getCurrentPose().pose; // Cartesian Path from the current position
-      
-      target_pose.position.x = -0.565;
-      target_pose.position.y = -0.1;
-      // target_pose.position.z = 0.75;
+    // Visualize the plan in RViz
+    visual_tools.deleteAllMarkers();
+    visual_tools.publishText(text_pose, "Joint Space Goal", rvt::WHITE, rvt::XLARGE);
+    visual_tools.publishPath(waypoints_to_storage, rvt::LIME_GREEN, rvt::SMALL);
+    for (std::size_t i = 0; i < waypoints_to_storage.size(); ++i)
+      visual_tools.publishAxisLabeled(waypoints_to_storage[i], "pt" + std::to_string(i), rvt::SMALL);
+    visual_tools.trigger();
 
-      // waypoints_to_storage.push_back(target_pose);
-      
-      if (box_count == 1)
-      {
-        target_pose.position.z = 0.40;
-        waypoints_to_storage.push_back(target_pose);
-        target_pose.position.z = 0;
-        waypoints_to_storage.push_back(target_pose);
-      }else if (box_count == 2)
-      {
-        target_pose.position.z = 0.40;
-        waypoints_to_storage.push_back(target_pose);
-        target_pose.position.z = 0.15;
-        waypoints_to_storage.push_back(target_pose);
-      }else if (box_count == 3)
-      {
-        target_pose.position.z = 0.60;
-        waypoints_to_storage.push_back(target_pose);
-        target_pose.position.z = 0.35;
-        waypoints_to_storage.push_back(target_pose);
-      }else if (box_count == 4)
-      {
-        target_pose.position.z = 0.60;
-        waypoints_to_storage.push_back(target_pose);
-        target_pose.position.z = 0.55;
-        waypoints_to_storage.push_back(target_pose);
-      }else if (box_count == 5)
-      {
-        // Do nothing
-      }
+    #ifdef DEBUG
+      visual_tools.prompt("Press 'next' to go down");
+    #endif
 
-      move_group.setMaxVelocityScalingFactor(0.2);
-      move_group.setMaxAccelerationScalingFactor(0.2);
-      move_group.setPlanningTime(PLANNING_TIMEOUT);
-
-      moveit_msgs::RobotTrajectory trajectory_to_storage;
-      for(int i = 0; i < 3; i++)
-      {
-        fraction = move_group.computeCartesianPath(waypoints_to_storage, eef_step, jump_threshold, trajectory_to_storage);
-        if (fraction == 1.0)
-          break;
-      }
-      // ================================= modify the velocity of Cartesian path ================================= //
-      // First create a RobotTrajectory object
-      robot_trajectory::RobotTrajectory rt(move_group.getCurrentState()->getRobotModel(), "manipulator");
-      // Second get a RobotTrajectory from trajectory
-      rt.setRobotTrajectoryMsg(*move_group.getCurrentState(), trajectory_to_storage);
-      // Thrid create a IterativeParabolicTimeParameterization object
-      trajectory_processing::IterativeParabolicTimeParameterization iptp;
-      // Fourth compute computeTimeStamps
-      bool success = iptp.computeTimeStamps(rt, 0.1, 0.1);
-      rt.getRobotTrajectoryMsg(trajectory_to_storage);
-
-      ROS_INFO_NAMED("tutorial", "moveToStorageSide Step 4: Cartesian To Storage (%.2f%% achieved)", fraction * 100.0);
-      cartesian_plan.trajectory_ = trajectory_to_storage;
-
-      // Visualize the plan in RViz
-      visual_tools.deleteAllMarkers();
-      visual_tools.publishText(text_pose, "Joint Space Goal", rvt::WHITE, rvt::XLARGE);
-      visual_tools.publishPath(waypoints_to_storage, rvt::LIME_GREEN, rvt::SMALL);
-      for (std::size_t i = 0; i < waypoints_to_storage.size(); ++i)
-        visual_tools.publishAxisLabeled(waypoints_to_storage[i], "pt" + std::to_string(i), rvt::SMALL);
-      visual_tools.trigger();
-
-      #ifdef DEBUG
-        visual_tools.prompt("Press 'next' to go down");
-      #endif
-
-      move_group.execute(cartesian_plan);
-    }
-
-    //  ====================== turn off the magnet to detach the brick  ====================== //
-    {
-      magnet_on_msg.data = 0;
-      magnet_state_pub.publish(magnet_on_msg); // MAGNET OFF
-      ROS_INFO("_placeInContainerServiceCallback: MAGNET_OFF");
-      ros::Duration(5).sleep();
-    }
-
-    //  ====================== move back to the default position  ====================== //
-    {
-      std::vector<geometry_msgs::Pose> waypoints_up_from_storage;
-      target_pose = move_group.getCurrentPose().pose; // Cartesian Path from the current position
-      ros::Duration(0.5).sleep();
-      target_pose = move_group.getCurrentPose().pose; // Cartesian Path from the current position
-      target_pose.position.z = 0.30;
-      waypoints_up_from_storage.push_back(target_pose);
-      move_group.execute(cartesian_plan);
-      move_group.setPlanningTime(PLANNING_TIMEOUT);
-      moveit_msgs::RobotTrajectory trajectory_up_from_storage;
-      for(int i = 0; i < 3; i++)
-      {
-        fraction = move_group.computeCartesianPath(waypoints_up_from_storage, eef_step, jump_threshold, trajectory_up_from_storage);
-        if (fraction == 1.0)
-          break;
-      }
-      ROS_INFO_NAMED("tutorial", "trajectory_up_from_storage: Cartesian To Storage (%.2f%% achieved)", fraction * 100.0);
-      cartesian_plan.trajectory_ = trajectory_up_from_storage;
-
-      move_group.execute(cartesian_plan);
-
-      moveToDefault(RIGHT);
-      
-      moveToDefault_finished_flag_msg.data = true;
-      moveToDefault_finished_flag_pub.publish(moveToDefault_finished_flag_msg); // let the planner know that the arm is up
-    } 
+    move_group.execute(cartesian_plan);
 
   }
 

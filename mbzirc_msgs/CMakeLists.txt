@@ -23,6 +23,7 @@ add_service_files(DIRECTORY srv
   ur_move.srv
   visual_servo_XY.srv
   visual_servo_yaw.srv
+  drop_blanket.srv
 )
 
 ## Generate messages in the 'action' folder
