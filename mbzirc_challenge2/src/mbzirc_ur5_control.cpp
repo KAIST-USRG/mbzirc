@@ -646,20 +646,45 @@ public:
       {
         target_pose.position.x = -0.565;
         target_pose.position.y = -0.1;
-        target_pose.position.z = 0.65;
+        // target_pose.position.z = 0.75;
       }else
       {
         target_pose.position.x = 0.565;
         target_pose.position.y = 0.1;
-        target_pose.position.z = 0.65;
+        // target_pose.position.z = 0.75;
       }
 
       waypoints_to_storage.push_back(target_pose);
       
-      target_pose.position.z = (req.order_of_this_brick  - 1) * 0.22;
-      ROS_INFO("z = %lf", target_pose.position.z);
-
-      waypoints_to_storage.push_back(target_pose);
+      if (req.order_of_this_brick == 1)
+      {
+        target_pose.position.z = 0.40;
+        waypoints_to_storage.push_back(target_pose);
+        target_pose.position.z = 0;
+        waypoints_to_storage.push_back(target_pose);
+      }else if (req.order_of_this_brick == 2)
+      {
+        target_pose.position.z = 0.40;
+        waypoints_to_storage.push_back(target_pose);
+        target_pose.position.z = 0.15;
+        waypoints_to_storage.push_back(target_pose);
+      }else if (req.order_of_this_brick == 3)
+      {
+        target_pose.position.z = 0.60;
+        waypoints_to_storage.push_back(target_pose);
+        target_pose.position.z = 0.35;
+        waypoints_to_storage.push_back(target_pose);
+      }else if (req.order_of_this_brick == 4)
+      {
+        target_pose.position.z = 0.60;
+        waypoints_to_storage.push_back(target_pose);
+        target_pose.position.z = 0.55;
+        waypoints_to_storage.push_back(target_pose);
+      }else if (req.order_of_this_brick == 5)
+      {
+        // Do nothing
+      }
+      
 
       move_group.setMaxVelocityScalingFactor(0.2);
       move_group.setMaxAccelerationScalingFactor(0.2);
@@ -1779,17 +1804,41 @@ public:
       target_pose = move_group.getCurrentPose().pose; // Cartesian Path from the current position
       ros::Duration(0.5).sleep();
       target_pose = move_group.getCurrentPose().pose; // Cartesian Path from the current position
-
+      
       target_pose.position.x = -0.565;
       target_pose.position.y = -0.1;
-      target_pose.position.z = 0.65;
+      // target_pose.position.z = 0.75;
 
-      waypoints_to_storage.push_back(target_pose);
+      // waypoints_to_storage.push_back(target_pose);
       
-      target_pose.position.z = (box_count - 1) * 0.22;
-      ROS_INFO("z = %lf", target_pose.position.z);
-
-      waypoints_to_storage.push_back(target_pose);
+      if (box_count == 1)
+      {
+        target_pose.position.z = 0.40;
+        waypoints_to_storage.push_back(target_pose);
+        target_pose.position.z = 0;
+        waypoints_to_storage.push_back(target_pose);
+      }else if (box_count == 2)
+      {
+        target_pose.position.z = 0.40;
+        waypoints_to_storage.push_back(target_pose);
+        target_pose.position.z = 0.15;
+        waypoints_to_storage.push_back(target_pose);
+      }else if (box_count == 3)
+      {
+        target_pose.position.z = 0.60;
+        waypoints_to_storage.push_back(target_pose);
+        target_pose.position.z = 0.35;
+        waypoints_to_storage.push_back(target_pose);
+      }else if (box_count == 4)
+      {
+        target_pose.position.z = 0.60;
+        waypoints_to_storage.push_back(target_pose);
+        target_pose.position.z = 0.55;
+        waypoints_to_storage.push_back(target_pose);
+      }else if (box_count == 5)
+      {
+        // Do nothing
+      }
 
       move_group.setMaxVelocityScalingFactor(0.2);
       move_group.setMaxAccelerationScalingFactor(0.2);
