@@ -3,7 +3,7 @@
 import rospy
 from geometry_msgs.msg import PoseStamped
 from geometry_msgs.msg import Twist
-#from service_ctl.srv import ugv_move, ugv_moveResponse
+from darknet_ros.msg import BoundingBoxes
 from service_ctl.srv import ugv_move, ugv_moveResponse
 from std_srvs.srv import Trigger, TriggerResponse
 import tf
@@ -21,6 +21,7 @@ class GotoBrick:
         self.raw_x                       = -1.0
         self.raw_y                       = -1.0
         self.raw_yaw                     = -1.0
+        self.plate_position              = BoundingBoxes()
         self.destination_x               = 0.0
         self.destination_y               = 0.0
         self.destination_yaw             = 0.0
@@ -28,19 +29,16 @@ class GotoBrick:
 
         self.twist_pub = rospy.Publisher('/cmd_vel', Twist, queue_size=10)
         rospy.Subscriber('/goal_position', PoseStamped, self.pose_callback, queue_size=10)
+        rospy.Subscriber('/arm_cam/bounding_boxes', BoundingBoxes, self.bounding_box_callback, queue_size=10)
 
         self.start_flag = False
 
         if self.service_control:
-            #self.service = rospy.Service('test', Trigger, self.run)
             self.service = rospy.Service('ugv_move_local', ugv_move, self.run)
             rospy.spin()
-    
-    #def service_callback(self, req):
-    #    rospy.loginfo('Service Received')
-    #    self.start_flag = True
-    #    #return TriggerResponse(True, 'Test')
-    #    return ugv_moveResponse(True)
+
+    def bounding_box_callback(self, bounding_msg):
+        self.plate_position = bounding_msg
 
     def pose_callback(self, pose_msg):
         quaternion = (
@@ -78,6 +76,9 @@ class GotoBrick:
 
         self.result_cmd_vel = control_speed
         
+    def align_plate(self):
+        self.result_cmd_vel = control_speed
+
     def publish_twist(self):
         self.twist_pub.publish(self.result_cmd_vel)
 
@@ -90,19 +91,31 @@ class GotoBrick:
         else:
             return False
 
+    def is_near(self):
+        distance = math.sqrt(self.raw_x ** 2 + self.raw_y ** 2)
+        if distance < 0.5:
+            return True
+        else:
+            return False
+
     def run(self, req=None):
         rospy.loginfo('Go to brick!')
         r = rospy.Rate(20)
         seq = 0
         while not rospy.is_shutdown():
-            self.calc_twist()
+            if is_near():
+                self.align_plate()
+            else:
+                self.calc_twist()
             self.publish_twist()
             if self.is_arrived():
                 break
             r.sleep()
             seq += 1
         rospy.loginfo('Brick closed!')
-        return ugv_moveResponse(True)
+
+        if self.service_control:
+            return ugv_moveResponse(True)
 
 if __name__ == "__main__":
     gotoBrick = GotoBrick()
