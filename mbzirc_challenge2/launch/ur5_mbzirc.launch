@@ -20,17 +20,20 @@
   <!-- Initialize Serial node (Arduino Control)-->
   <!--<node name="mag_serial_node" pkg="mag_serial" type="mag_serial_node" respawn="false" output="screen"/> -->
 
+  <!-- Initialize STM: Switch and Magnet Controller-->
+  <node name="mag_serial_node" pkg="mag_serial" type="MAG_serial_node" respawn="false" output="screen"/>
+
   <!-- Initialize Arduino: Switch -->
-  <node name="serial_node_switch" pkg="rosserial_python" type="serial_node.py" respawn="false" output="screen">
+  <!-- <node name="serial_node_switch" pkg="rosserial_python" type="serial_node.py" respawn="false" output="screen">
     <param name="port" value="/dev/ttyACM2"/>
     <param name="baud" value="9600"/>
-  </node>
+  </node> -->
 
   <!-- Initialize 1D lidar node-->
-  <node name="lidar_1D" pkg="teraranger" type="evo" respawn="false" output="screen">
+  <!-- <node name="lidar_1D" pkg="teraranger" type="evo" respawn="false" output="screen">
     <param name="portname" value="/dev/ttyACM3" />
     <param name="sensor_type" value="Evo_3m" />
-  </node>
+  </node> -->
 
 
 

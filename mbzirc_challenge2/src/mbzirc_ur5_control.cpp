@@ -38,6 +38,7 @@
 #include "mbzirc_msgs/place_in_container.h"
 #include "mbzirc_msgs/visual_servo_XY.h"
 #include "mbzirc_msgs/visual_servo_yaw.h"
+#include "mbzirc_msgs/drop_blanket.h"
 
 // msg
 #include <std_msgs/Bool.h>
@@ -54,7 +55,7 @@
 #define DELAY                 1.0         // for sleep function => robot updating states => 0.4 s fail (?)
 #define PLANNING_TIMEOUT      2
 #define NUM_SUM               3           // to average the pose message
-#define NUM_DISCARD           100
+#define NUM_DISCARD           10
 #define DIST_EE_TO_MAGNET     0.077
 #define DIST_CAM_TO_EE        -0.015
 #define DIST_LIDAR_TO_MAGNET  0.06
@@ -145,7 +146,7 @@ private:
   // msg
   std_msgs::Bool finish_stop_xy_msg;
   std_msgs::Bool finish_stop_yaw_msg;
-  std_msgs::Bool magnet_state_msg;
+  
   std_msgs::Bool moveToDefault_finished_flag_msg;
   std_msgs::Bool moveToDefault_flag_msg;
   std_msgs::Bool moveToStorageSide_finished_flag_msg;
@@ -153,7 +154,8 @@ private:
   std_msgs::Bool readCamData_flag_msg;
 
   std_msgs::Int16 box_count_msg;
-  
+  std_msgs::Int32 magnet_on_msg;
+
   geometry_msgs::Pose target_pose;
   geometry_msgs::Pose avg_pose_msg; // absolute position w.r.t UR5 base
   geometry_msgs::Point avg_Z_msg;
@@ -168,6 +170,7 @@ private:
   ros::ServiceServer go_to_brick_ss;
   ros::ServiceServer place_in_container_ss;
   ros::ServiceServer ur_move_ss;          // request is from mission_manager node
+  ros::ServiceServer drop_blanket_ss;
 
 
   // Service
@@ -175,6 +178,7 @@ private:
   mbzirc_msgs::place_in_container place_in_container_srv;
   mbzirc_msgs::visual_servo_XY visual_servo_XY_srv;
   mbzirc_msgs::visual_servo_yaw visual_servo_yaw_srv;
+  mbzirc_msgs::drop_blanket drop_blanket_srv;
 
   // Node Handle
   // ros::NodeHandle node_handle;
@@ -219,9 +223,7 @@ public:
     moveToDefault_finished_flag_pub = nh.advertise<std_msgs::Bool>("/moveToDefault_finish_flag", 10);
     readCamData_flag_pub = nh.advertise<std_msgs::Bool>("/readCamData_Flag", 10);
 
-
     // Subscriber
-    
     manual_moveXVZ_sub = nh.subscribe("/manual_moveXVZ", 10, &Arm::manual_moveXYZ, this);
     moveToDefault_flag_sub = nh.subscribe("/moveToDefault_flag", 10, &Arm::moveToDafaultFlagCallback, this);
     plate_yaw_incorrect_sub = nh.subscribe("/ur5_rotation_incorrect", 1, &Arm::plateYawIncorrectCallback, this);
@@ -241,26 +243,63 @@ public:
     // Service Server
     go_to_brick_ss = nh.advertiseService("/go_to_brick", &Arm::_goToBrickServiceCallback, this);
     place_in_container_ss = nh.advertiseService("/place_in_container", &Arm::_placeInContainerServiceCallback, this);
-    ur_move_ss = nh.advertiseService("ur_move", &Arm::urMoveCallback, this);
-
-    // ros::Duration(1).sleep();
-    // // Turn on Magnet
-    // magnet_state_msg.data = true;
-    // magnet_state_pub.publish(magnet_state_msg);
-    // ROS_INFO("Initialize: MAGNET_ON");
+    ur_move_ss = nh.advertiseService("ur_move", &Arm::urMoveServiceCallback, this);
+    drop_blanket_ss = nh.advertiseService("/ur_drop_blanket", &Arm::urDropBlanketServiceCallback, this);
 
     // DEBUG
     moveToStorageSide_flag_sub = nh.subscribe("/moveToStorageSide_flag", 10, &Arm::moveToStorageSideFlagCallback, this);
   }
 
   // ==================== Service Callback Function ==================== //
-  bool urMoveCallback(mbzirc_msgs::ur_move::Request  &req,
+  bool urDropBlanketServiceCallback(mbzirc_msgs::drop_blanket::Request  &req,
+                       mbzirc_msgs::drop_blanket::Response  &res)
+  {
+    /*  To drop the blanket on the simulated fire target
+    */
+    if (req.need_to_drop_blanket == false)
+    {
+      res.success_or_fail = false;
+      return true;
+    }
+    else
+    {
+      ROS_INFO("=============== Adjust Default Position ===============");
+      {
+        moveToDefault(RIGHT);
+      }
+
+      ROS_INFO("=============== Move EE to the start point of the mission ===============");
+      {
+        moveTo(-0.11, 0.30, 0.30, 0.3, 0.3);
+      }
+
+      ROS_INFO("=============== Drop blanket action 1 ===============");
+      {
+        // Do something
+      }
+
+      ROS_INFO("=============== Move EE toward the end point of the mission ===============");
+      {
+        moveXYZSlowly(0, 0.55, 0.0, 0.3, 0.3, false);
+      }
+
+      ROS_INFO("=============== Drop blanket action 2 ===============");
+      {
+        // Do something
+      }
+      res.success_or_fail = true;
+      return true;
+    }
+  }
+
+
+  bool urMoveServiceCallback(mbzirc_msgs::ur_move::Request  &req,
                        mbzirc_msgs::ur_move::Response  &res)
   {    
     /*  The service server to communicate with mission_manager (central planner)
     */
 
-    ROS_INFO("========== Adjust Default Position According to the target container side ==========");
+    ROS_INFO("=============== Adjust Default Position  ===============");
     {
       moveToDefault(RIGHT);
 
@@ -535,7 +574,7 @@ public:
     while (true)
     {
       ROS_INFO("_goToBrickServiceCallback: Moving Down Slowly");
-      moveXYZSlowly(0, 0, -0.50, 0.04, 0.04, false); // continue to move down until the tactile sensor is triggered
+      moveXYZSlowly(0, 0, -0.50, 0.02, 0.02, false); // continue to move down until the tactile sensor is triggered
 
       if (FLAG_SWITCH_TOUCHED == true) // tactile sensor is triggered => stop
       {
@@ -548,8 +587,8 @@ public:
 
     //  ====================== Open magnet to make it stronger  ====================== //
     {
-      magnet_state_msg.data = 1;
-      magnet_state_pub.publish(magnet_state_msg); // MAGNET ON
+      magnet_on_msg.data = 1;
+      magnet_state_pub.publish(magnet_on_msg); // MAGNET ON
       ROS_INFO("_goToBrickServiceCallback: MAGNET_ON");
       ros::Duration(1.0).sleep();
       attachBrick(req.brick_color_code);
@@ -654,7 +693,7 @@ public:
         // target_pose.position.z = 0.75;
       }
 
-      waypoints_to_storage.push_back(target_pose);
+      // waypoints_to_storage.push_back(target_pose);
       
       if (req.order_of_this_brick == 1)
       {
@@ -728,8 +767,8 @@ public:
 
     //  ====================== turn off the magnet to detach the brick  ====================== //
     {
-      magnet_state_msg.data = 0;
-      magnet_state_pub.publish(magnet_state_msg); // MAGNET OFF
+      magnet_on_msg.data = 0;
+      magnet_state_pub.publish(magnet_on_msg); // MAGNET OFF
       ROS_INFO("_placeInContainerServiceCallback: MAGNET_OFF");
       ros::Duration(3).sleep();
       
@@ -781,8 +820,8 @@ public:
 
     //  ====================== turn the magnet on again  ====================== //
     {
-      // magnet_state_msg.data = true;
-      // magnet_state_pub.publish(magnet_state_msg); // MAGNET OFF
+      // magnet_on_msg.data = true;
+      // magnet_state_pub.publish(magnet_on_msg); // MAGNET OFF
       // ROS_INFO("_placeInContainerServiceCallback: MAGNET_ON");
       return true;
       
@@ -1015,7 +1054,7 @@ public:
   }
 
 
-  void switchStateCallback(const std_msgs::Bool::ConstPtr& msg)
+  void switchStateCallback(const std_msgs::Int32::ConstPtr& msg)
   {
     /*  switch always publish 1 if untouched
     *   if either of the switch is touched => publish 0 => the robot arm's motion should stop
@@ -1142,6 +1181,64 @@ public:
         break;
     }
     ROS_INFO_NAMED("tutorial", "moveFromCurrentState: CartesianPath (%.2f%% achieved)", fraction * 100.0);
+    cartesian_plan.trajectory_ = trajectory_down;
+
+
+    #ifdef DEBUG
+      visual_tools.prompt("Press 'next' to go down");
+      // ros::Duration(DELAY).sleep();
+    #endif
+
+    move_group.execute(cartesian_plan);
+  }
+
+  void moveTo(float toX, float toY, float toZ, float max_v_scaling, float max_a_scaling)
+  {
+    /*  Move the end_effector of UR5 to the target point w.r.t UGV frame
+    *   INPUT: x, y, z point w.r.t UGV axis
+    */
+
+    std::vector<geometry_msgs::Pose> waypoints_down;
+    target_pose = move_group.getCurrentPose().pose; // Cartesian Path from the current position
+    ros::Duration(0.5).sleep();
+    target_pose = move_group.getCurrentPose().pose; // Cartesian Path from the current position
+
+    target_pose.position.x = toX;
+
+    // Measure DIST_CAM_TO_EE, see CONSTANT part => read bricks' position from camera, but we want to move EE to the brick
+    target_pose.position.y = toY;
+    // Measure DIST_CAM_TO_EE, see CONSTANT part
+    target_pose.position.z = toZ;
+    waypoints_down.push_back(target_pose);
+
+
+    move_group.setMaxVelocityScalingFactor(0.4);
+    move_group.setMaxAccelerationScalingFactor(0.4);
+    move_group.setPlanningTime(PLANNING_TIMEOUT);
+
+
+    moveit_msgs::RobotTrajectory trajectory_down;
+    for(int i = 0; i < 3; i++)
+    {
+      fraction = move_group.computeCartesianPath(waypoints_down, eef_step, jump_threshold, trajectory_down);
+      if (fraction == 1.0)
+        break;
+    }
+    // ================================= modify the velocity of Cartesian path ================================= //
+    // First create a RobotTrajectory object
+    robot_trajectory::RobotTrajectory rt(move_group.getCurrentState()->getRobotModel(), "manipulator");
+    // Second get a RobotTrajectory from trajectory
+    rt.setRobotTrajectoryMsg(*move_group.getCurrentState(), trajectory_down);
+    // Thrid create a IterativeParabolicTimeParameterization object
+    trajectory_processing::IterativeParabolicTimeParameterization iptp;
+    // Fourth compute computeTimeStamps
+    bool success = iptp.computeTimeStamps(rt, max_v_scaling, max_a_scaling);
+    rt.getRobotTrajectoryMsg(trajectory_down);
+
+    ROS_INFO_NAMED("tutorial", "moveXYZSlowly (%.2f%% achieved)", fraction * 100.0);
+    cartesian_plan.trajectory_ = trajectory_down;
+
+    ROS_INFO_NAMED("tutorial", "moveTo: CartesianPath (%.2f%% achieved)", fraction * 100.0);
     cartesian_plan.trajectory_ = trajectory_down;
 
 
@@ -1882,8 +1979,8 @@ public:
 
     //  ====================== turn off the magnet to detach the brick  ====================== //
     {
-      magnet_state_msg.data = 0;
-      magnet_state_pub.publish(magnet_state_msg); // MAGNET OFF
+      magnet_on_msg.data = 0;
+      magnet_state_pub.publish(magnet_on_msg); // MAGNET OFF
       ROS_INFO("_placeInContainerServiceCallback: MAGNET_OFF");
       ros::Duration(5).sleep();
     }
