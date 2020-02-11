@@ -77,6 +77,10 @@ class GotoBrick:
         self.result_cmd_vel = control_speed
         
     def align_plate(self):
+        control_speed = Twist()
+        control_speed.linear.x = 0.0
+        control_speed.linear.y = 0.0
+        control_speed.angular.z = 0.0
         self.result_cmd_vel = control_speed
 
     def publish_twist(self):
@@ -85,7 +89,7 @@ class GotoBrick:
     def pose_filter(self):
         pass
 
-    def is_arrived(self):
+    def is_arrived(self): #TODO: Fix the arrive condition to plate position
         if 0.0 < self.raw_x < 0.5 and 0.0 < self.raw_y < 0.4:
             return True
         else:
@@ -103,7 +107,7 @@ class GotoBrick:
         r = rospy.Rate(20)
         seq = 0
         while not rospy.is_shutdown():
-            if is_near():
+            if self.is_near():
                 self.align_plate()
             else:
                 self.calc_twist()
