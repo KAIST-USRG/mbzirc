@@ -13,9 +13,13 @@ import math
 class GotoBrick:
     def __init__(self):
         rospy.init_node('goto_brick', anonymous=True)
-        
+
+        self.max_x_speed                 = rospy.get_param('~max_x_speed', 1.5)        
+        self.max_y_speed                 = rospy.get_param('~max_y_speed', 1.5)        
+        self.max_yaw_speed               = rospy.get_param('~max_yaw_speed', 0.75)        
         self.x_axis_reduce_gain          = rospy.get_param('~x_gain', 0.1)
         self.y_axis_reduce_gain          = rospy.get_param('~y_gain', 0.1)
+        self.yaw_reduce_gain             = rospy.get_param('~yaw_gain', 0.4)
         self.service_control             = rospy.get_param('~service_control', True)
 
         self.raw_x                       = -1.0
@@ -67,12 +71,12 @@ class GotoBrick:
         elif self.raw_x < 0.5:
             control_speed.linear.x = 0.0
             control_speed.linear.y = self.raw_y * self.y_axis_reduce_gain
-            control_speed.angular.z = 0.0
+            control_speed.angular.z = self.raw_yaw * self.yaw_reduce_gain
         else:
             #goto brick
             control_speed.linear.x = self.raw_x * self.x_axis_reduce_gain
             control_speed.linear.y = self.raw_y * self.y_axis_reduce_gain
-            control_speed.angular.z = 0.0
+            control_speed.angular.z = self.raw_yaw * self.yaw_reduce_gain
 
         self.result_cmd_vel = control_speed
         
@@ -84,6 +88,13 @@ class GotoBrick:
         self.result_cmd_vel = control_speed
 
     def publish_twist(self):
+        if self.result_cmd_vel.linear.x > self.max_x_speed:
+            self.result_cmd_vel.linear.x = self.max_x_speed
+        if self.result_cmd_vel.linear.y > self.max_y_speed:
+            self.result_cmd_vel.linear.y = self.max_y_speed
+        if self.result_cmd_vel.angular.z > self.max_yaw_speed:
+            self.result_cmd_vel.angular.z = self.max_yaw_speed
+
         self.twist_pub.publish(self.result_cmd_vel)
 
     def pose_filter(self):
