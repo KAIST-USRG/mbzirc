@@ -2,9 +2,12 @@
 #include <ros/console.h>
 #include <string>
 #include <algorithm>
+#include <fstream>
+#include <sstream>
 #include <iostream>
+#include <list>
 #include <vector>
-#include<iterator>
+#include <iterator>
 #include "tf/transform_datatypes.h"
 #include <tf2_msgs/TFMessage.h>
 #include <tf/transform_broadcaster.h>
@@ -74,15 +77,20 @@ private:
     double roll, pitch, yaw, roll_, pitch_, yaw_;
     double heading_local;
     double weight = 0.05;
+    int len=0;
+    int i=0;
+    int k=0;
+
 public:
     Control()
-    {
+    { 
         pub_cmd  = nh.advertise<geometry_msgs::Twist>("/move_base/cmd_vel",100);
         vector_direction_cmd  = nh.advertise<geometry_msgs::PoseStamped>("/check_vector",100);
         heading_direction_cmd  = nh.advertise<geometry_msgs::PoseStamped>("/check_cmd_heading",100);
-
         ekf_odom = nh.subscribe("/outdoor_nav/odometry/EKF_estimated",1,&Control::ekf_odom_callback, this);
         goal     = nh.subscribe("goal_point", 1, &Control::goal_point_callback, this);
+
+
     }
     void clockwise_rotation(float x, float y, float angle, float move_heading){
         // x_vel_vec = cos(angle)*x + sin(angle)*y;
@@ -221,19 +229,25 @@ public:
             vel.linear.y = 0.5 * vel.linear.y;
         }
 
-        // if (aco >=350 && aco <=10 ){
+        // if (aco >=355 && aco <=5 ){
         //     vel.angular.z = 0.0;
         // }
-        // else if (aco >10 && aco <=180) {
-        //     vel.angular.z = +0.2;
+        // else if ((aco >5 && acos<30)) {
+        //     vel.angular.z = +0.3;
         // }
-        // else if (aco >180 && aco <350){
-        //     vel.angular.z = -0.2;
+        // else if ((aco >=30 && acos<180)) {
+        //     vel.angular.z = +0.6;
+        // }
+        // else if (aco >=180 && aco <330){
+        //     vel.angular.z = -0.6;
+        // }
+        // else if (aco >=330 && aco <355){
+        //     vel.angular.z = -0.3;
         // }
         // else {
         //     vel.angular.z =0.0;
         // }
-        // if (fabs(vel.angular.z) >= 0.2){
+        // if (fabs(vel.angular.z) >= 0.4){
         //     vel.linear.x = 0.5 * vel.linear.x;
         //     vel.linear.y = 0.5 * vel.linear.y;
         // }
@@ -250,8 +264,15 @@ public:
         if (move_to_goal == true){
             pub_cmd.publish(vel);
         }
-        if ((sqrt(pow((goal_point_x-current_point_x),2)+pow((goal_point_y-current_point_y),2))) < 2){
+        if ((sqrt(pow((goal_point_x-current_point_x),2)+pow((goal_point_y-current_point_y),2))) < 2 && (sqrt(pow((goal_point_x-current_point_x),2)+pow((goal_point_y-current_point_y),2))) > 1){
             move_to_goal = false;
+        }
+        if ((sqrt(pow((goal_point_x-current_point_x),2)+pow((goal_point_y-current_point_y),2))) < 1){
+            move_to_goal = false;        
+            vel.linear.x = 0;
+            vel.linear.y = 0;
+            vel.angular.z = 0;
+            pub_cmd.publish(vel);
         }
         x_vel_vec_prev = vel.linear.x;
         y_vel_vec_prev = vel.linear.y;

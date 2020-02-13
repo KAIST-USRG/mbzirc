@@ -27,6 +27,7 @@ find_package(catkin REQUIRED
     tf2_geometry_msgs
     message_generation
     mbzirc_msgs
+    dynamixel_workbench_msgs
 )
 find_package(Boost REQUIRED system filesystem date_time thread)
 
@@ -49,6 +50,7 @@ generate_messages(
   DEPENDENCIES
   std_msgs
   geometry_msgs
+  dynamixel_workbench_msgs
 )
 
 catkin_package(

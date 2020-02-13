@@ -16,6 +16,7 @@ add_message_files(DIRECTORY msg
 ## Generate messages in the 'srv' folder
 add_service_files(DIRECTORY srv
   FILES
+  request_layers.srv
   go_to_brick.srv
   place_in_container.srv
   test.srv
@@ -24,6 +25,7 @@ add_service_files(DIRECTORY srv
   visual_servo_XY.srv
   visual_servo_yaw.srv
   drop_blanket.srv
+  
 )
 
 ## Generate messages in the 'action' folder

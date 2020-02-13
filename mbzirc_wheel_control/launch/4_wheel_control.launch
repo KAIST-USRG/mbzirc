@@ -14,7 +14,7 @@
 
   <include file="$(find mbzirc_wheel_control)/launch/mbzirc_odrive.launch" />
   
-  <arg name="usb_port"                default="/dev/ttyUSB0"/>  <!-- ttyUSB0 -->
+  <arg name="usb_port"                default="/dev/ttyDynamixel"/>
   <arg name="dxl_baud_rate"           default="57600"/>
   <arg name="namespace"               default="dynamixel_workbench"/>
 

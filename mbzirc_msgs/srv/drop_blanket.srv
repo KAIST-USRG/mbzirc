@@ -1,3 +1,4 @@
 bool need_to_drop_blanket
 ---
 bool success_or_fail
+
