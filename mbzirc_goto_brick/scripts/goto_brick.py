@@ -1,9 +1,11 @@
 #!/usr/bin/env python
 
 import rospy
+from std_msgs.msg import String
 from geometry_msgs.msg import PoseStamped
 from geometry_msgs.msg import Twist
 from darknet_ros.msg import BoundingBoxes
+from darknet_ros.msg import BoundingBox
 from service_ctl.srv import ugv_move, ugv_moveResponse
 from std_srvs.srv import Trigger, TriggerResponse
 import tf
@@ -21,17 +23,22 @@ class GotoBrick:
         self.y_axis_reduce_gain          = rospy.get_param('~y_gain', 0.1)
         self.yaw_reduce_gain             = rospy.get_param('~yaw_gain', 0.4)
         self.service_control             = rospy.get_param('~service_control', True)
+        self.status_pub                  = rospy.get_param('~status_publish', True)
 
+        self.current_status              = 'Initialized'
         self.raw_x                       = -1.0
         self.raw_y                       = -1.0
         self.raw_yaw                     = -1.0
-        self.plate_position              = BoundingBoxes()
+        self.plate_bounding_box          = BoundingBox()
         self.destination_x               = 0.0
         self.destination_y               = 0.0
         self.destination_yaw             = 0.0
         self.result_cmd_vel              = Twist()
 
         self.twist_pub = rospy.Publisher('/cmd_vel', Twist, queue_size=10)
+        if self.status_pub is True:
+            self.status_pub = rospy.Publisher('/goto_brick_status', String, queue_size=10)
+
         rospy.Subscriber('/goal_position', PoseStamped, self.pose_callback, queue_size=10)
         rospy.Subscriber('/arm_cam/bounding_boxes', BoundingBoxes, self.bounding_box_callback, queue_size=10)
 
@@ -41,8 +48,10 @@ class GotoBrick:
             self.service = rospy.Service('ugv_move_local', ugv_move, self.run)
             rospy.spin()
 
-    def bounding_box_callback(self, bounding_msg):
-        self.plate_position = bounding_msg
+    def bounding_box_callback(self, boxes_msg):
+        for box in boxes_msg.bounding_boxes:
+            if box.Class == 'plate' and box.probability > 0.7:
+                self.plate_bounding_box = box
 
     def pose_callback(self, pose_msg):
         quaternion = (
@@ -59,11 +68,7 @@ class GotoBrick:
 
     def calc_twist(self):
         control_speed = Twist()
-        if self.is_arrived():
-            control_speed.linear.x = 0.0
-            control_speed.linear.y = 0.0
-            control_speed.angular.z = 0.0
-        elif self.raw_x < 0.0 and self.raw_y < 0.0:
+        if self.raw_x < 0.0 and self.raw_y < 0.0:
             #point turn
             control_speed.linear.x = 0.0
             control_speed.linear.y = 0.0
@@ -81,13 +86,28 @@ class GotoBrick:
         self.result_cmd_vel = control_speed
         
     def align_plate(self):
+        
         control_speed = Twist()
-        control_speed.linear.x = 0.0
-        control_speed.linear.y = 0.0
-        control_speed.angular.z = 0.0
+
+        if self.is_arrived():
+            control_speed.linear.x = 0.0
+            control_speed.linear.y = 0.0
+            control_speed.angular.z = 0.0
+        elif self.plate_bounding_box < 0.0 and self.plate_bounding_box < 0.0:
+            control_speed.linear.x = 0.0
+            control_speed.linear.y = self.raw_y * self.y_axis_reduce_gain
+            control_speed.angular.z = self.raw_yaw * self.yaw_reduce_gain
+        else:
+            #goto brick
+            control_speed.linear.x = self.raw_x * self.x_axis_reduce_gain
+            control_speed.linear.y = self.raw_y * self.y_axis_reduce_gain
+            control_speed.angular.z = self.raw_yaw * self.yaw_reduce_gain
+            
         self.result_cmd_vel = control_speed
 
-    def publish_twist(self):
+    def publish_twist(self, speed=None):
+        if not speed is None:
+            self.result_cmd_vel = speed
         if self.result_cmd_vel.linear.x > self.max_x_speed:
             self.result_cmd_vel.linear.x = self.max_x_speed
         if self.result_cmd_vel.linear.y > self.max_y_speed:
@@ -97,8 +117,10 @@ class GotoBrick:
 
         self.twist_pub.publish(self.result_cmd_vel)
 
-    def pose_filter(self):
-        pass
+    def publish_current_status(self):
+        status_msg = String()
+        status_msg.data = self.current_status
+        self.status_pub.publish(status_msg)
 
     def is_arrived(self): #TODO: Fix the arrive condition to plate position
         if 0.0 < self.raw_x < 0.5 and 0.0 < self.raw_y < 0.4:
@@ -114,20 +136,30 @@ class GotoBrick:
             return False
 
     def run(self, req=None):
-        rospy.loginfo('Go to brick!')
+        self.current_status = 'Start'
+        rospy.loginfo('Let\'s go to the brick!')
         r = rospy.Rate(20)
         seq = 0
         while not rospy.is_shutdown():
-            if self.is_near():
-                self.align_plate()
-            else:
-                self.calc_twist()
-            self.publish_twist()
             if self.is_arrived():
+                self.current_status = 'Arrived'
+                stop_msg = Twist()
+                self.publish_twist(stop_msg)
                 break
+            elif self.is_near():
+                self.current_status = 'Near'
+                self.align_plate()
+                self.publish_twist()
+            else:
+                self.current_status = 'Far'
+                self.calc_twist()
+                self.publish_twist()
+
+            if self.status_pub():
+                self.publish_current_status()
+
             r.sleep()
             seq += 1
-        rospy.loginfo('Brick closed!')
 
         if self.service_control:
             return ugv_moveResponse(True)
