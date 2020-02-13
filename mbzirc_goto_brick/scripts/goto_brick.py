@@ -30,6 +30,7 @@ class GotoBrick:
         self.raw_y                       = -1.0
         self.raw_yaw                     = -1.0
         self.plate_bounding_box          = BoundingBox()
+        self.plate_center_point          = [0, 0] 
         self.destination_x               = 0.0
         self.destination_y               = 0.0
         self.destination_yaw             = 0.0
@@ -52,6 +53,7 @@ class GotoBrick:
         for box in boxes_msg.bounding_boxes:
             if box.Class == 'plate' and box.probability > 0.7:
                 self.plate_bounding_box = box
+                self.plate_center_point = [(box.xmin + box.xmax)/2, (box.ymin + box.ymax)/2]
 
     def pose_callback(self, pose_msg):
         quaternion = (
@@ -86,19 +88,12 @@ class GotoBrick:
         self.result_cmd_vel = control_speed
         
     def align_plate(self):
-        
         control_speed = Twist()
-
-        if self.is_arrived():
-            control_speed.linear.x = 0.0
-            control_speed.linear.y = 0.0
-            control_speed.angular.z = 0.0
-        elif self.plate_bounding_box < 0.0 and self.plate_bounding_box < 0.0:
+        if self.plate_bounding_box. < 0.0 and self.plate_bounding_box < 0.0:
             control_speed.linear.x = 0.0
             control_speed.linear.y = self.raw_y * self.y_axis_reduce_gain
             control_speed.angular.z = self.raw_yaw * self.yaw_reduce_gain
         else:
-            #goto brick
             control_speed.linear.x = self.raw_x * self.x_axis_reduce_gain
             control_speed.linear.y = self.raw_y * self.y_axis_reduce_gain
             control_speed.angular.z = self.raw_yaw * self.yaw_reduce_gain
@@ -122,8 +117,9 @@ class GotoBrick:
         status_msg.data = self.current_status
         self.status_pub.publish(status_msg)
 
-    def is_arrived(self): #TODO: Fix the arrive condition to plate position
-        if 0.0 < self.raw_x < 0.5 and 0.0 < self.raw_y < 0.4:
+    def is_arrived(self):
+        # if 0.0 < self.raw_x < 0.5 and 0.0 < self.raw_y < 0.4:
+        if 873 < self.plate_center_point[0] < 1437 and 129 < self.plate_center_point[1] < 315:
             return True
         else:
             return False
