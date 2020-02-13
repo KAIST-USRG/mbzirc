@@ -16,7 +16,7 @@ Servo MAG_RIGHT;
 
 
 void setup() {
-  Serial.begin(921600); // USB, ROS Interface
+  Serial.begin(115200); // USB, ROS Interface
 #ifdef DEBUG_MODE
   Serial.println("Setup Start");
   Serial.println("");
