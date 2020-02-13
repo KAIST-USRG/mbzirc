@@ -89,7 +89,7 @@ class GotoBrick:
         
     def align_plate(self):
         control_speed = Twist()
-        if self.plate_bounding_box. < 0.0 and self.plate_bounding_box < 0.0:
+        if self.plate_bounding_box < 0.0:
             control_speed.linear.x = 0.0
             control_speed.linear.y = self.raw_y * self.y_axis_reduce_gain
             control_speed.angular.z = self.raw_yaw * self.yaw_reduce_gain
