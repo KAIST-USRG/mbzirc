@@ -393,7 +393,7 @@ public:
         //   }
         // }
 
-        moveTo(target_pose.position.x, target_pose.position.y, 0.30, 0.3, 0.3);
+        // moveTo(target_pose.position.x, target_pose.position.y, 0.30, 0.3, 0.3);
         
         
         bool xy_success = moveXYZSlowly(visual_servo_XY_srv.response.x * MAX_DIST, 
@@ -687,6 +687,8 @@ public:
       #endif
 
       move_group.move();                      // BLOCKING FUNCTION
+
+      moveXYZSlowly(0, 0.10, 0, 0.1, 0.1, false);
 
       res.success = true;
       res.workspace_reachable = true;
