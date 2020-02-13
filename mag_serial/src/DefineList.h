@@ -14,18 +14,18 @@
 #include <std_msgs/Int8.h>
 #include <std_msgs/Int32.h>
 #include <std_msgs/Bool.h>
-std_msgs::Bool TSW_Status;
+std_msgs::Int32 TSW_Status;
 
 // setup the initial name
 using namespace ros;
 using namespace std;
 
-#define DEBUG_MODE
-#define DEBUG_MODE_Agent_List
-#define ROS_FREQ  5.0    // while loop frequency [Hz]
+// #define DEBUG_MODE
+// #define DEBUG_MODE_Agent_List
+#define ROS_FREQ  500.0    // while loop frequency [Hz]
 
-#define PORT1 		"/dev/ttyUSB0"
-#define BAUDRATE 	921600
+#define PORT1 		"/dev/ttyUSB1"
+#define BAUDRATE 	115200
 
 #define D2R	        3.1415926535/180.0
 #define eps             0.000001

@@ -1,0 +1,3 @@
+bool request_layers	# to know the approximate height of the target brick
+---
+int32 layers	# 1 ~ 5 layers

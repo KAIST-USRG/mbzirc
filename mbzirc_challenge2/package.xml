@@ -29,6 +29,7 @@
   <build_depend>tf2_geometry_msgs</build_depend>
   <build_depend>message_generation</build_depend>
   <build_depend>mbzirc_msgs</build_depend>
+  <build_depend>dynamixel_workbench_msgs</build_depend>
 
   <exec_depend>panda_moveit_config</exec_depend>
   <exec_depend>pluginlib</exec_depend>
@@ -49,6 +50,7 @@
   <exec_depend>rosserial_python</exec_depend>
   <exec_depend>message_runtime</exec_depend>
   <exec_depend>mbzirc_msgs</exec_depend>
+  <exec_depend>dynamixel_workbench_msgs</exec_depend>
 
   <export>
     <!-- Other tools can request additional information be placed here -->

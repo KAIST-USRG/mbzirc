@@ -16,18 +16,18 @@
 // node main loop, for ROS
 int main(int argc, char** argv)
 {
-	init(argc, argv, "MAG_serial_node");      // node name initialization
+	init(argc, argv, "mag_serial_node");      // node name initialization
 	NodeHandle nh;                           // assign node handler
 
 	printf("Initiate: MAG_serial_node\n");    // for debugging
 
 // Publish Topic
-	ROS_RX_MAG_Data_pub = nh.advertise<std_msgs::Bool>("/switch_on", 1);
-	printf("Initiate: publish rostopic </MAG_Status>\n");   // for debugging
+	ROS_RX_MAG_Data_pub = nh.advertise<std_msgs::Int32>("/switch_state", 1);
+	printf("Initiate: publish rostopic </switch_state>\n");   // for debugging
 
 // Subscribe Topic
 	ROS_TX_CMD_Data_sub = nh.subscribe("/magnet_on", 1, ROS_CMD_MAG_Data_Callback);
-	printf("Initiate: Subscribe rostopic </ROS_CMD_MAG>\n");   // for debugging
+	printf("Initiate: Subscribe rostopic </magnet_on>\n");   // for debugging
 
 	FdPort1 = OpenSerial(PORT1);             // Open Serial
 	SerialReceive(FdPort1);                  // Serial Receive (pthread)
@@ -86,16 +86,8 @@ void UpdateCommand(void)
 
 void TSW_State_Publish(void)
 {
-	if (status_TSW == 0)
-	{
-		TSW_Status.data = false;
-	}
-	else
-	{
-		TSW_Status.data = true;
-	}
-	
-    ROS_RX_MAG_Data_pub.publish(TSW_Status);
+	TSW_Status.data = status_TSW;
+	ROS_RX_MAG_Data_pub.publish(TSW_Status);
 }
 
 void ROS_CMD_MAG_Data_Callback(const std_msgs::Int32& msg_input)

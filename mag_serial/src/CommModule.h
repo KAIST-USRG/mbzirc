@@ -115,11 +115,20 @@ void* receive_p_thread(void *fdt)
                 break;
 
             case 3:
-                if(read((int)fd, &RXRawData[2], 2) == 1)
+                if(read((int)fd, &RXRawData[2], 1) == 1)
                 {
                     status_MAG = RXRawData[2];
-                    status_TSW = RXRawData[3];
 		            StrROS_RX_MAG_Data.Status_MAG = status_MAG;
+                    ParsingMode = 4;
+                }
+                else
+                    ParsingMode = 1;
+                break;
+
+            case 4:
+                if(read((int)fd, &RXRawData[3], 1) == 1)
+                {
+                    status_TSW = RXRawData[3];
 		            StrROS_RX_MAG_Data.Status_TSW = status_TSW;
                 }
                 else
