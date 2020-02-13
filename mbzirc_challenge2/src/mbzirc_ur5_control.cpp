@@ -42,7 +42,7 @@
 #include "mbzirc_msgs/visual_servo_XY.h"
 #include "mbzirc_msgs/visual_servo_yaw.h"
 #include "mbzirc_msgs/drop_blanket.h"
-#include "mbzirc_msgs/request_layers.h"
+// #include "mbzirc_msgs/request_layers.h"
 
 // msg
 #include <std_msgs/Bool.h>
@@ -63,7 +63,7 @@
 #define DIST_EE_TO_MAGNET     0.077
 #define DIST_CAM_TO_EE        -0.015
 #define DIST_LIDAR_TO_MAGNET  0.06
-#define Z_OFFSET              0.07
+#define Z_OFFSET              0.20
 #define BELT_BASE_HEIGHT      0.26
 
 // color code
@@ -103,7 +103,7 @@ float gb_xq_sum             = 0;
 float gb_yq_sum             = 0;
 float gb_zq_sum             = 0;
 float gb_wq_sum             = 0;
-long long int gb_dynamixel_id7_position = 0;
+long int gb_dynamixel_id7_position = 0;
 
 
 class Arm{
@@ -186,7 +186,7 @@ private:
   mbzirc_msgs::place_in_container place_in_container_srv;
   mbzirc_msgs::visual_servo_XY visual_servo_XY_srv;
   mbzirc_msgs::visual_servo_yaw visual_servo_yaw_srv;
-  mbzirc_msgs::request_layers request_layers_srv;
+  // mbzirc_msgs::request_layers request_layers_srv;
 
   dynamixel_workbench_msgs::DynamixelCommand ur5_base_slide_srv;
 
@@ -236,7 +236,7 @@ public:
     readCamData_flag_pub = nh.advertise<std_msgs::Bool>("/readCamData_Flag", 10);
 
     // Subscriber
-    dynamixel_state_sub = nh.subscribe("/dynamixel_workbench/dynamixel_state", 10, &Arm::updateDesiredPositionCallBack, this);
+    dynamixel_state_sub = nh.subscribe("/dynamixel_workbench/dynamixel_state", 10, &Arm::updateID7DynamixelPositionCallBack, this);
     manual_moveXVZ_sub = nh.subscribe("/manual_moveXVZ", 10, &Arm::manual_moveXYZ, this);
     moveToDefault_flag_sub = nh.subscribe("/moveToDefault_flag", 10, &Arm::moveToDafaultFlagCallback, this);
     plate_yaw_incorrect_sub = nh.subscribe("/ur5_rotation_incorrect", 1, &Arm::plateYawIncorrectCallback, this);
@@ -251,7 +251,8 @@ public:
     place_in_container_sc = nh.serviceClient<mbzirc_msgs::place_in_container>("/place_in_container");
     visual_servo_XY_sc = nh.serviceClient<mbzirc_msgs::visual_servo_XY>("/visual_servo_XY");
     visual_servo_yaw_sc = nh.serviceClient<mbzirc_msgs::visual_servo_yaw>("/visual_servo_yaw");
-    request_layers_sc = nh.serviceClient<mbzirc_msgs::request_layers>("/request_layers");
+    ur5_base_slide_sc = nh.serviceClient<dynamixel_workbench_msgs::DynamixelCommand>("/dynamixel_workbench/dynamixel_command");
+    // request_layers_sc = nh.serviceClient<mbzirc_msgs::request_layers>("/request_layers");
 
 
     // Service Server
@@ -714,12 +715,10 @@ public:
       {
         target_pose.position.x = -0.565;
         target_pose.position.y = -0.1;
-
       }else
       {
         target_pose.position.x = 0.565;
         target_pose.position.y = 0.1;
-
       }
       
       if (req.order_of_this_brick == 1)
@@ -789,34 +788,7 @@ public:
     ROS_INFO("//  ====================== Slide the UR5 base ====================== //");
     {
       // DYNAMIXEL service
-      // ur5_base_slide_srv.request.command = '';
-      ur5_base_slide_srv.request.id = 7;
-      ur5_base_slide_srv.request.addr_name = "Goal_Position";
-
-      if (req.brick_container_side == LEFT)
-      {
-        ur5_base_slide_srv.request.value = -1600000;
-      }else
-
-      {
-        ur5_base_slide_srv.request.value = -2350000;
-      }
-
-      // call the service
-      if (ur5_base_slide_sc.call(ur5_base_slide_srv))
-      {
-        if(ur5_base_slide_srv.response.comm_result == true)
-        {
-           // wait until the dynamixel reach the desired position
-        }else
-        {
-          // fail to request service
-          std::cout << "ur5_base_slide_sc: Failed to call service" << std::endl;
-          res.success = false;  // place_in_container_srv failed
-          return true;          // return to the ur_move_sc
-        }
-      }
-
+      bool success = slide_ur5_base_orange_backward(req.brick_container_side);
     }
 
     ROS_INFO("//  ====================== Go down the container ====================== //");
@@ -896,10 +868,7 @@ public:
       deleteObject();
     }
 
-    ROS_INFO("//  ====================== UR5 base side: back to Default position  ====================== //");
-    {
-      // DYNAMIXEL service
-    }
+    
 
     ROS_INFO("//  ====================== move back to the default position  ====================== //");
     {
@@ -934,6 +903,11 @@ public:
         cartesian_plan.trajectory_ = trajectory_up_from_storage;
 
         move_group.execute(cartesian_plan);
+      }
+
+      ROS_INFO("//  ====================== UR5 base side: back to Default position  ====================== //");
+      {
+        bool success = slide_ur5_base_home_position();
       }
       
 
@@ -1188,10 +1162,12 @@ public:
     
   }
 
-  void updateDesiredPositionCallBack(const dynamixel_workbench_msgs::DynamixelStateList::ConstPtr& msg)
-  {
-    // do something
 
+  void updateID7DynamixelPositionCallBack(const dynamixel_workbench_msgs::DynamixelStateList::ConstPtr& msg)
+  {
+    // dynamixel_state[0] is the position of ID seven
+    // ROS_INFO("update position: %d of id = %d", msg->dynamixel_state[0].present_position, msg->dynamixel_state[0].id);
+    gb_dynamixel_id7_position = msg->dynamixel_state[0].present_position;
   }
 
   // ==================== Class Function ==================== //
@@ -1512,6 +1488,78 @@ public:
     move_group.move();                      // BLOCKING FUNCTION
   }
 
+  bool slide_ur5_base_orange_backward(bool container_direction)
+  {
+    ur5_base_slide_srv.request.command = "";
+    ur5_base_slide_srv.request.id = 7;
+    ur5_base_slide_srv.request.addr_name = "Goal_Position";
+
+    if (container_direction == LEFT)
+    {
+      ur5_base_slide_srv.request.value = -1600000;
+    }else
+    {
+      ur5_base_slide_srv.request.value = -2350000;
+    }
+
+    // call the service
+    if (ur5_base_slide_sc.call(ur5_base_slide_srv))
+    {
+      ROS_INFO("slide_ur5_base_orange_backward 1111111111");
+      if(ur5_base_slide_srv.response.comm_result == true)
+      {
+          ROS_INFO("slide_ur5_base_orange_backward");
+          // wait until the dynamixel reach the desired position
+          slide_ur5_base_wait_for_finish(ur5_base_slide_srv.request.value);
+          return true;
+      }else
+      {
+        // fail to request service
+        std::cout << "slide_ur5_base_orange_backward: ur5_base_slide_sc: Failed to call service" << std::endl;
+        return false;
+      }
+    }else{
+      std::cout << "slide_ur5_base_orange_backward: ur5_base_slide_sc: Failed to call service" << std::endl;
+    }
+  }
+
+  bool slide_ur5_base_home_position()
+  {
+    ur5_base_slide_srv.request.command = "";
+    ur5_base_slide_srv.request.id = 7;
+    ur5_base_slide_srv.request.addr_name = "Goal_Position";
+
+    ur5_base_slide_srv.request.value = -200000;
+
+    // call the service
+    if (ur5_base_slide_sc.call(ur5_base_slide_srv))
+    {
+      if(ur5_base_slide_srv.response.comm_result == true)
+      {
+          ROS_INFO("slide_ur5_base_home_position");
+          // wait until the dynamixel reach the desired position
+          slide_ur5_base_wait_for_finish(ur5_base_slide_srv.request.value);
+          return true;
+      }else
+      {
+        // fail to request service
+        std::cout << "slide_ur5_base_home_position: ur5_base_slide_sc: Failed to call service" << std::endl;
+        return false;
+      }
+    }
+  }
+
+  void slide_ur5_base_wait_for_finish(long int desired_position)
+  {
+    long long int margin = 8;
+    while (true)
+    {
+      if (gb_dynamixel_id7_position <= desired_position + margin && gb_dynamixel_id7_position >= desired_position - margin)
+      {
+        return; // reaching the derised_position continue ...
+      }
+    }
+  }
 
   void resetYaw()
   {
@@ -1957,7 +2005,6 @@ public:
     // ros::Duration(DELAY).sleep();           // wait for robot to update current state otherwise failed
   }
 
-
   void moveToStorageSideFlagCallback(const std_msgs::Bool::ConstPtr& msg)
   {
     // Subscribe: moveToStorageSide_flag_msg
@@ -1981,7 +2028,7 @@ public:
     std::vector<double> joint_group_positions;
     current_state->copyJointGroupPositions(joint_model_group, joint_group_positions);
 
-    //  ====================== Turn the robot arm to the correct container side  ====================== //
+    ROS_INFO("============== Turn the robot arm to the correct container side  ==============");
     {
       current_state = move_group.getCurrentState();
       ros::Duration(0.5).sleep();
@@ -2007,50 +2054,44 @@ public:
       move_group.move();                      // BLOCKING FUNCTION
     }
 
-    //  ====================== go to the container  ====================== //
+    ROS_INFO("//  ====================== go to the container  ====================== //");
     {
       std::vector<geometry_msgs::Pose> waypoints_to_storage;
       target_pose = move_group.getCurrentPose().pose; // Cartesian Path from the current position
       ros::Duration(0.5).sleep();
       target_pose = move_group.getCurrentPose().pose; // Cartesian Path from the current position
-      
+
+
       target_pose.position.x = -0.565;
       target_pose.position.y = -0.1;
-      // target_pose.position.z = 0.75;
 
-      // waypoints_to_storage.push_back(target_pose);
       
       if (box_count == 1)
       {
         target_pose.position.z = 0.40;
         waypoints_to_storage.push_back(target_pose);
-        target_pose.position.z = 0;
-        waypoints_to_storage.push_back(target_pose);
+
       }else if (box_count == 2)
       {
         target_pose.position.z = 0.40;
         waypoints_to_storage.push_back(target_pose);
-        target_pose.position.z = 0.15;
-        waypoints_to_storage.push_back(target_pose);
+
       }else if (box_count == 3)
       {
         target_pose.position.z = 0.60;
         waypoints_to_storage.push_back(target_pose);
-        target_pose.position.z = 0.35;
-        waypoints_to_storage.push_back(target_pose);
+
       }else if (box_count == 4)
       {
         target_pose.position.z = 0.60;
         waypoints_to_storage.push_back(target_pose);
-        target_pose.position.z = 0.55;
-        waypoints_to_storage.push_back(target_pose);
+
       }else if (box_count == 5)
       {
-        // Do nothing
+        // Don't change the height
+        waypoints_to_storage.push_back(target_pose);
       }
-
-      move_group.setMaxVelocityScalingFactor(0.2);
-      move_group.setMaxAccelerationScalingFactor(0.2);
+      
       move_group.setPlanningTime(PLANNING_TIMEOUT);
 
       moveit_msgs::RobotTrajectory trajectory_to_storage;
@@ -2071,7 +2112,7 @@ public:
       bool success = iptp.computeTimeStamps(rt, 0.1, 0.1);
       rt.getRobotTrajectoryMsg(trajectory_to_storage);
 
-      ROS_INFO_NAMED("tutorial", "moveToStorageSide Step 4: Cartesian To Storage (%.2f%% achieved)", fraction * 100.0);
+      ROS_INFO_NAMED("tutorial", "_placeInContainerServiceCallback: go to the container (%.2f%% achieved)", fraction * 100.0);
       cartesian_plan.trajectory_ = trajectory_to_storage;
 
       // Visualize the plan in RViz
@@ -2089,41 +2130,126 @@ public:
       move_group.execute(cartesian_plan);
     }
 
-    //  ====================== turn off the magnet to detach the brick  ====================== //
+    ROS_INFO("//  ====================== Slide the UR5 base ====================== //");
     {
-      magnet_on_msg.data = 0;
-      magnet_state_pub.publish(magnet_on_msg); // MAGNET OFF
-      ROS_INFO("_placeInContainerServiceCallback: MAGNET_OFF");
-      ros::Duration(5).sleep();
+      // DYNAMIXEL service
+      bool success = slide_ur5_base_orange_backward(LEFT);
+      
     }
 
-    //  ====================== move back to the default position  ====================== //
+    ROS_INFO("//  ====================== Go down the container ====================== //");
     {
-      std::vector<geometry_msgs::Pose> waypoints_up_from_storage;
+      std::vector<geometry_msgs::Pose> waypoints_down_to_storage;
       target_pose = move_group.getCurrentPose().pose; // Cartesian Path from the current position
       ros::Duration(0.5).sleep();
       target_pose = move_group.getCurrentPose().pose; // Cartesian Path from the current position
-      target_pose.position.z = 0.30;
-      waypoints_up_from_storage.push_back(target_pose);
-      move_group.execute(cartesian_plan);
+
+      if (box_count == 1)
+      {
+        target_pose.position.z = 0;
+        waypoints_down_to_storage.push_back(target_pose);
+      }else if (box_count == 2)
+      {
+        target_pose.position.z = 0.15;
+        waypoints_down_to_storage.push_back(target_pose);
+      }else if (box_count == 3)
+      {
+        target_pose.position.z = 0.35;
+        waypoints_down_to_storage.push_back(target_pose);
+      }else if (box_count == 4)
+      {
+        target_pose.position.z = 0.55;
+        waypoints_down_to_storage.push_back(target_pose);
+      }else if (box_count == 5)
+      {
+        // Do nothing
+      }
+
       move_group.setPlanningTime(PLANNING_TIMEOUT);
-      moveit_msgs::RobotTrajectory trajectory_up_from_storage;
+
+      moveit_msgs::RobotTrajectory trajectory_down_to_storage;
       for(int i = 0; i < 3; i++)
       {
-        fraction = move_group.computeCartesianPath(waypoints_up_from_storage, eef_step, jump_threshold, trajectory_up_from_storage);
+        fraction = move_group.computeCartesianPath(waypoints_down_to_storage, eef_step, jump_threshold, trajectory_down_to_storage);
         if (fraction == 1.0)
           break;
       }
-      ROS_INFO_NAMED("tutorial", "trajectory_up_from_storage: Cartesian To Storage (%.2f%% achieved)", fraction * 100.0);
-      cartesian_plan.trajectory_ = trajectory_up_from_storage;
+      // ================================= modify the velocity of Cartesian path ================================= //
+      // First create a RobotTrajectory object
+      robot_trajectory::RobotTrajectory rt(move_group.getCurrentState()->getRobotModel(), "manipulator");
+      // Second get a RobotTrajectory from trajectory
+      rt.setRobotTrajectoryMsg(*move_group.getCurrentState(), trajectory_down_to_storage);
+      // Thrid create a IterativeParabolicTimeParameterization object
+      trajectory_processing::IterativeParabolicTimeParameterization iptp;
+      // Fourth compute computeTimeStamps
+      bool success = iptp.computeTimeStamps(rt, 0.1, 0.1);
+      rt.getRobotTrajectoryMsg(trajectory_down_to_storage);
+
+      ROS_INFO_NAMED("tutorial", "_placeInContainerServiceCallback: go down the container (%.2f%% achieved)", fraction * 100.0);
+      cartesian_plan.trajectory_ = trajectory_down_to_storage;
+
+      // Visualize the plan in RViz
+      visual_tools.deleteAllMarkers();
+      visual_tools.publishText(text_pose, "Joint Space Goal", rvt::WHITE, rvt::XLARGE);
+      visual_tools.publishPath(waypoints_down_to_storage, rvt::LIME_GREEN, rvt::SMALL);
+      for (std::size_t i = 0; i < waypoints_down_to_storage.size(); ++i)
+        visual_tools.publishAxisLabeled(waypoints_down_to_storage[i], "pt" + std::to_string(i), rvt::SMALL);
+      visual_tools.trigger();
+
+      #ifdef DEBUG
+        visual_tools.prompt("Press 'next' to go down");
+      #endif
 
       move_group.execute(cartesian_plan);
+    }
+
+    ROS_INFO("//  ====================== UR5 base side: back to Default position  ====================== //");
+    {
+      // DYNAMIXEL service
+      bool success = slide_ur5_base_home_position();
+    }
+
+    ROS_INFO("//  ====================== move back to the default position  ====================== //");
+    {
+      if (box_count == 1 || box_count == 2)
+      {
+        std::vector<geometry_msgs::Pose> waypoints_up_from_storage;
+        target_pose = move_group.getCurrentPose().pose; // Cartesian Path from the current position
+        ros::Duration(0.5).sleep();
+        target_pose = move_group.getCurrentPose().pose; // Cartesian Path from the current position
+        target_pose.position.z = 0.30;
+        waypoints_up_from_storage.push_back(target_pose);
+        move_group.execute(cartesian_plan);
+        move_group.setPlanningTime(PLANNING_TIMEOUT);
+        moveit_msgs::RobotTrajectory trajectory_up_from_storage;
+        for(int i = 0; i < 3; i++)
+        {
+          fraction = move_group.computeCartesianPath(waypoints_up_from_storage, eef_step, jump_threshold, trajectory_up_from_storage);
+          if (fraction == 1.0)
+            break;
+        }
+        // ================================= modify the velocity of Cartesian path ================================= //
+        // First create a RobotTrajectory object
+        robot_trajectory::RobotTrajectory rt(move_group.getCurrentState()->getRobotModel(), "manipulator");
+        // Second get a RobotTrajectory from trajectory
+        rt.setRobotTrajectoryMsg(*move_group.getCurrentState(), trajectory_up_from_storage);
+        // Thrid create a IterativeParabolicTimeParameterization object
+        trajectory_processing::IterativeParabolicTimeParameterization iptp;
+        // Fourth compute computeTimeStamps
+        bool success = iptp.computeTimeStamps(rt, 0.3, 0.3);
+        rt.getRobotTrajectoryMsg(trajectory_up_from_storage);
+        ROS_INFO_NAMED("tutorial", "trajectory_up_from_storage: Cartesian To Storage (%.2f%% achieved)", fraction * 100.0);
+        cartesian_plan.trajectory_ = trajectory_up_from_storage;
+
+        move_group.execute(cartesian_plan);
+      }
+      
 
       moveToDefault(RIGHT);
       
       moveToDefault_finished_flag_msg.data = true;
       moveToDefault_finished_flag_pub.publish(moveToDefault_finished_flag_msg); // let the planner know that the arm is up
-    } 
+    }
 
   }
 
