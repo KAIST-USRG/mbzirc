@@ -42,7 +42,7 @@
 #include "mbzirc_msgs/visual_servo_XY.h"
 #include "mbzirc_msgs/visual_servo_yaw.h"
 #include "mbzirc_msgs/drop_blanket.h"
-// #include "mbzirc_msgs/request_layers.h"
+#include "mbzirc_msgs/request_layers.h"
 
 // msg
 #include <std_msgs/Bool.h>
@@ -63,7 +63,7 @@
 #define DIST_EE_TO_MAGNET     0.077
 #define DIST_CAM_TO_EE        -0.015
 #define DIST_LIDAR_TO_MAGNET  0.06
-#define Z_OFFSET              0.20
+#define Z_OFFSET              0.15
 #define BELT_BASE_HEIGHT      0.26
 
 // color code
@@ -186,11 +186,11 @@ private:
   mbzirc_msgs::place_in_container place_in_container_srv;
   mbzirc_msgs::visual_servo_XY visual_servo_XY_srv;
   mbzirc_msgs::visual_servo_yaw visual_servo_yaw_srv;
-  // mbzirc_msgs::request_layers request_layers_srv;
+  mbzirc_msgs::request_layers request_layers_srv;
 
   dynamixel_workbench_msgs::DynamixelCommand ur5_base_slide_srv;
 
-  // mbzirc_msgs::drop_blanket drop_blanket_srv;
+  mbzirc_msgs::drop_blanket drop_blanket_srv;
 
   // Node Handle
   // ros::NodeHandle node_handle;
@@ -252,7 +252,7 @@ public:
     visual_servo_XY_sc = nh.serviceClient<mbzirc_msgs::visual_servo_XY>("/visual_servo_XY");
     visual_servo_yaw_sc = nh.serviceClient<mbzirc_msgs::visual_servo_yaw>("/visual_servo_yaw");
     ur5_base_slide_sc = nh.serviceClient<dynamixel_workbench_msgs::DynamixelCommand>("/dynamixel_workbench/dynamixel_command");
-    // request_layers_sc = nh.serviceClient<mbzirc_msgs::request_layers>("/request_layers");
+    request_layers_sc = nh.serviceClient<mbzirc_msgs::request_layers>("/request_layers");
 
 
     // Service Server
@@ -358,19 +358,45 @@ public:
       visual_servo_XY_srv.request.brick_color_code = req.target_brick_color_code;
       if(visual_servo_XY_sc.call(visual_servo_XY_srv))
       {
-        std::cout << "visual_servo_XY_sc: Response : " << visual_servo_XY_srv.response.x << std::endl;
-        std::cout << "visual_servo_XY_sc: Response : " << visual_servo_XY_srv.response.y << std::endl;
+        ROS_INFO("visual_servo_XY_sc: Response: (%lf, %lf)", visual_servo_XY_srv.response.x, visual_servo_XY_srv.response.y);
         float MAX_DIST = 1;
 
         current_state = move_group.getCurrentState();
         ros::Duration(0.5).sleep();
         current_state = move_group.getCurrentState();
         
-        moveTo(target_pose.position.x, target_pose.position.y, 0.60, 0.3, 0.3);
         ROS_INFO("Move Down a little bit to increase reachable workspace");
+        {
+          request_layers_srv.request.request_layers = true;
+          if(request_layers_sc.call(request_layers_srv))
+          {
+            ROS_INFO("request_layers_sc: # layers: %d", request_layers_srv.response.layers);
+            switch (request_layers_srv.response.layers)
+            {
+              case 1: moveTo(target_pose.position.x, target_pose.position.y, 0.20, 0.3, 0.3);
+                      break;
+              case 2: moveTo(target_pose.position.x, target_pose.position.y, 0.30, 0.3, 0.3);
+                      break;
+              case 3: moveTo(target_pose.position.x, target_pose.position.y, 0.40, 0.3, 0.3);
+                      break;
+              case 4: moveTo(target_pose.position.x, target_pose.position.y, 0.50, 0.3, 0.3);
+                      break;
+              case 5: moveTo(target_pose.position.x, target_pose.position.y, 0.60, 0.3, 0.3);
+                      break;
+              default: break;
+            }
+            
+            
+          }else
+          {
+            std::cout << "request_layers_sc: Failed to call service" << std::endl;
+          }
+        }
+        
+        
         bool xy_success = moveXYZSlowly(visual_servo_XY_srv.response.x * MAX_DIST, 
                                        visual_servo_XY_srv.response.y * MAX_DIST, 
-                                       0, 0.02, 0.02, true);
+                                       0, 0.1, 0.1, true);
 
         if (FLAG_XY_STOP != true) // cannot reach to the brick
         {
@@ -392,6 +418,7 @@ public:
     {
       // reset flag used in this Service
       FLAG_YAW_STOP = false;
+      FLAG_YAW_INCORRECT = false;
       visual_servo_yaw_srv.request.waiting_for_data_yaw = true;
       visual_servo_yaw_srv.request.increase_margin = false;
       while(true)
@@ -405,11 +432,14 @@ public:
           }
 
           std::cout << "visual_servo_yaw_sc: Response : " << visual_servo_yaw_srv.response.yaw << std::endl;
-          moveYawSlowly(LEFT, 0.05, 0.05);
+          if(FLAG_YAW_INCORRECT == false)
+          {
+            moveYawSlowly(LEFT, 0.02, 0.02);
+          }
+          
           if(FLAG_YAW_INCORRECT == true)
           {
-            resetYaw();
-            moveYawSlowly(RIGHT, 0.05, 0.05);
+            moveYawSlowly(RIGHT, 0.02, 0.02);
           }
 
           if (FLAG_YAW_STOP == true) // cannot reach to the brick
@@ -471,7 +501,6 @@ public:
         if (!go_to_brick_srv.response.workspace_reachable) // Check if that position is in workspace
         {
           // Return to mission maneger
-          ROS_INFO("go_to_brick_sc: Cannot find the correct Yaw angle");
           res.workspace_reachable = false; 
           return true;
         }
@@ -548,7 +577,7 @@ public:
       target_pose.position.z = target_pose.position.z - (req.z / 2);
       waypoints_down.push_back(target_pose);
 
-      target_pose.position.z = target_pose.position.z - (req.z / 2) + DIST_LIDAR_TO_MAGNET + DIST_EE_TO_MAGNET + Z_OFFSET;
+      target_pose.position.z = target_pose.position.z - (req.z / 2) + DIST_LIDAR_TO_MAGNET + Z_OFFSET;
       waypoints_down.push_back(target_pose);
 
       move_group.setPlanningTime(PLANNING_TIMEOUT);
@@ -685,7 +714,14 @@ public:
       current_state = move_group.getCurrentState();
       current_state->copyJointGroupPositions(joint_model_group, joint_group_positions);
 
-      joint_group_positions[0] = 3 * PI/2; // Turn UR toward the container LEFT side
+      if (req.brick_container_side == LEFT)
+      {
+        joint_group_positions[0] = 3 * PI/2; // Turn UR toward the container LEFT side
+      }else
+      {
+        joint_group_positions[0] = PI/2; // Turn UR toward the container RIGHT side
+      }
+      
 
       move_group.setJointValueTarget(joint_group_positions);
       move_group.setPlanningTime(PLANNING_TIMEOUT);
@@ -789,6 +825,11 @@ public:
     {
       // DYNAMIXEL service
       bool success = slide_ur5_base_orange_backward(req.brick_container_side);
+      if (!success)
+      {
+        res.success = false;
+        return true;
+      }
     }
 
     ROS_INFO("//  ====================== Go down the container ====================== //");
@@ -908,6 +949,11 @@ public:
       ROS_INFO("//  ====================== UR5 base side: back to Default position  ====================== //");
       {
         bool success = slide_ur5_base_home_position();
+        if (!success)
+        {
+          res.success = false;
+          return true;
+        }
       }
       
 
@@ -1016,7 +1062,7 @@ public:
         ROS_INFO("calcAvgCallback: Accumulate the data");
         // gb_x_sum += msg->position.x;
         // gb_y_sum += msg->position.y;
-        if(msg->range > 1.085)
+        if(msg->range > 1.085)  // 1d-lidar point to the ground
         {
           gb_z_sum += 1.085;
         }else
@@ -1090,7 +1136,7 @@ public:
       ROS_INFO("plateYawIncorrectCallback: wrong direction of yaw");
       FLAG_YAW_INCORRECT = true;
       move_group.stop();
-    
+      resetYaw();
     }
     else
     {
@@ -1285,6 +1331,7 @@ public:
 
     move_group.execute(cartesian_plan);
   }
+
 
   void moveTo(float toX, float toY, float toZ, float max_v_scaling, float max_a_scaling)
   {
@@ -1488,6 +1535,7 @@ public:
     move_group.move();                      // BLOCKING FUNCTION
   }
 
+
   bool slide_ur5_base_orange_backward(bool container_direction)
   {
     ur5_base_slide_srv.request.command = "";
@@ -1523,6 +1571,7 @@ public:
     }
   }
 
+
   bool slide_ur5_base_home_position()
   {
     ur5_base_slide_srv.request.command = "";
@@ -1549,6 +1598,7 @@ public:
     }
   }
 
+
   void slide_ur5_base_wait_for_finish(long int desired_position)
   {
     long long int margin = 8;
@@ -1560,6 +1610,7 @@ public:
       }
     }
   }
+
 
   void resetYaw()
   {
@@ -1589,6 +1640,7 @@ public:
 
     move_group.move();                      // BLOCKING FUNCTION
   }
+
 
   // ==================== Initialization =====================//
   void initWall()
@@ -1949,6 +2001,7 @@ public:
 
   }
 
+
   // ==================== FOR DEBUGGING REMOVE IF NOT NEEDED ==================== //
   void manual_moveXYZ(const geometry_msgs::Pose::ConstPtr& msg)
   {
@@ -2004,6 +2057,7 @@ public:
     move_group.execute(cartesian_plan);
     // ros::Duration(DELAY).sleep();           // wait for robot to update current state otherwise failed
   }
+
 
   void moveToStorageSideFlagCallback(const std_msgs::Bool::ConstPtr& msg)
   {
