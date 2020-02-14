@@ -1,4 +1,0 @@
-<launch>
-  <node pkg="navi" type="controller_node" name="control" />
-  <node pkg="navi" name="waypoint" type="waypoint.py" output="screen"/>
-</launch>

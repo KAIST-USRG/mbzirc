@@ -688,7 +688,8 @@ public:
 
       move_group.move();                      // BLOCKING FUNCTION
 
-      moveXYZSlowly(0, 0.10, 0, 0.1, 0.1, false);
+      // GO front a so that the orange brick does not hit GPS antenna
+      moveXYZSlowly(0, 0.10, 0, 0.1, 0.1, false); 
 
       res.success = true;
       res.workspace_reachable = true;
@@ -730,8 +731,8 @@ public:
       move_group.setJointValueTarget(joint_group_positions);
       move_group.setPlanningTime(PLANNING_TIMEOUT);
       move_group.setGoalJointTolerance(0.01);
-      move_group.setMaxVelocityScalingFactor(0.3);
-      move_group.setMaxAccelerationScalingFactor(0.3);
+      move_group.setMaxVelocityScalingFactor(0.1);
+      move_group.setMaxAccelerationScalingFactor(0.1);
 
       bool success{move_group.plan(my_plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS};
       ROS_INFO_NAMED("tutorial", "moveToStorageSide Step 2: Turn %s", success ? "SUCCEEDED" : "FAILED");
@@ -742,6 +743,17 @@ public:
       #endif
 
       move_group.move();                      // BLOCKING FUNCTION
+    }
+
+    ROS_INFO("//  ====================== Slide the UR5 base ====================== //");
+    {
+      // DYNAMIXEL service
+      bool success = slide_ur5_base_orange_backward(req.brick_container_side);
+      if (!success)
+      {
+        res.success = false;
+        return true;
+      }
     }
 
     ROS_INFO("//  ====================== go to the container  ====================== //");
@@ -824,17 +836,7 @@ public:
 
       move_group.execute(cartesian_plan);
     }
-
-    ROS_INFO("//  ====================== Slide the UR5 base ====================== //");
-    {
-      // DYNAMIXEL service
-      bool success = slide_ur5_base_orange_backward(req.brick_container_side);
-      if (!success)
-      {
-        res.success = false;
-        return true;
-      }
-    }
+   
 
     ROS_INFO("//  ====================== Go down the container ====================== //");
     {
@@ -912,18 +914,17 @@ public:
       detachBrick();
       deleteObject();
     }
-
-    
+ 
 
     ROS_INFO("//  ====================== move back to the default position  ====================== //");
     {
-      if (req.order_of_this_brick == 1 || req.order_of_this_brick == 2)
+      if (req.order_of_this_brick <= 4) // move up from the container
       {
         std::vector<geometry_msgs::Pose> waypoints_up_from_storage;
         target_pose = move_group.getCurrentPose().pose; // Cartesian Path from the current position
         ros::Duration(0.5).sleep();
         target_pose = move_group.getCurrentPose().pose; // Cartesian Path from the current position
-        target_pose.position.z = 0.30;
+        target_pose.position.z = 0.70;
         waypoints_up_from_storage.push_back(target_pose);
         move_group.execute(cartesian_plan);
         move_group.setPlanningTime(PLANNING_TIMEOUT);
@@ -948,6 +949,32 @@ public:
         cartesian_plan.trajectory_ = trajectory_up_from_storage;
 
         move_group.execute(cartesian_plan);
+      }
+
+      ROS_INFO("// ============ Turn the robot arm toward the front position ============= //");
+      {
+        current_state = move_group.getCurrentState();
+        ros::Duration(0.5).sleep();
+        current_state = move_group.getCurrentState();
+        current_state->copyJointGroupPositions(joint_model_group, joint_group_positions);
+
+        joint_group_positions[0] = PI; // Turn UR toward the container RIGHT side
+
+        move_group.setJointValueTarget(joint_group_positions);
+        move_group.setPlanningTime(PLANNING_TIMEOUT);
+        move_group.setGoalJointTolerance(0.01);
+        move_group.setMaxVelocityScalingFactor(0.1);
+        move_group.setMaxAccelerationScalingFactor(0.1);
+
+        bool success{move_group.plan(my_plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS};
+        ROS_INFO_NAMED("tutorial", "Turn toward the front position %s", success ? "SUCCEEDED" : "FAILED");
+
+
+        #ifdef DEBUG
+          visual_tools.prompt("Press 'next' to front position");
+        #endif
+
+        move_group.move();                      // BLOCKING FUNCTION
       }
 
       ROS_INFO("//  ====================== UR5 base side: back to Default position  ====================== //");
@@ -1116,6 +1143,7 @@ public:
 
     }
   }
+
 
   void moveToDafaultFlagCallback(const std_msgs::Bool::ConstPtr& msg)
   {
