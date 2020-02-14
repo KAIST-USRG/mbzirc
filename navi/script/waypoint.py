@@ -11,12 +11,14 @@ from time import sleep
 class Robot:
    rospy.init_node('Goal_publisher', anonymous=True)
    def __init__(self):
-       f = open("/home/usrg/catkin_ws/src/mbzirc/navi/waypoint_files/waypoint.txt", 'r')
+#       f = open("/home/jay/catkin_ws/src/navi/waypoint.txt", 'r')
+       f = open("path_record.txt", 'r')
+
        lines = f.readlines()
        f.close()
        index =0
        self.change = True
-       self.Cnt =0
+       self.Cnt =1
        self.len = len(lines)
        self.M = np.zeros((self.len,7))
        for line in lines:
@@ -37,6 +39,12 @@ class Robot:
        self.current_x = data.pose.pose.position.x
        self.current_y = data.pose.pose.position.y
        if (self.Cnt < self.len):
+            self.prev_x   = self.M[self.Cnt-1,0]
+            self.prev_y   = self.M[self.Cnt-1,1]
+            self.goal_x   = self.M[self.Cnt,0]
+            self.goal_y   = self.M[self.Cnt,1]
+            self.dist_prev = np.sqrt((self.prev_x-self.current_x)**2+(self.prev_y-self.current_y)**2)
+            self.dist_goal = np.sqrt((self.goal_x-self.current_x)**2+(self.goal_y-self.current_y)**2)          
             goal.header.frame_id   = "odom"
             goal.header.stamp = rospy.Time.now()
             goal.pose.position.x   = self.M[self.Cnt,0]
@@ -46,13 +54,13 @@ class Robot:
             goal.pose.orientation.y = self.M[self.Cnt,4]
             goal.pose.orientation.z = self.M[self.Cnt,5]
             goal.pose.orientation.w = self.M[self.Cnt,6]
-       if (self.change==True) and (self.Cnt < self.len):
-            sleep(0.1)
-            pub_goal.publish(goal)
-            self.change=False
-       if (np.sqrt((goal.pose.position.x-self.current_x)**2+(goal.pose.position.y-self.current_y)**2)<2):
-            self.Cnt +=1
-            self.change=True
+            if (self.change==True):
+                    sleep(1)
+                    pub_goal.publish(goal)
+                    self.change=False
+            if (self.dist_prev > self.dist_goal):
+                    self.Cnt +=1
+                    self.change=True
 
 if __name__ == '__main__':
     try:

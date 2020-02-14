@@ -220,15 +220,19 @@ void MBZIRC_ROBOT::wheel_encoder_RR_callback(const std_msgs::Int32::ConstPtr& ms
 //Dynamixel Yaw angle
 void MBZIRC_ROBOT::dynamixel_position_callback(const sensor_msgs::JointState::ConstPtr& msg) {
     //Matching position data to robot system --> it is notified by Donghee.
-    RR_yaw_angle = msg -> position.at(0) * angle_direction; // unit : [rad]
-    FL_yaw_angle = msg -> position.at(1) * angle_direction;
-    FR_yaw_angle = msg -> position.at(2) * angle_direction;
+    RR_yaw_angle = msg -> position.at(0) * angle_direction; // unit : [rad] //1
+    FL_yaw_angle = msg -> position.at(1) * angle_direction; //2
+    FR_yaw_angle = msg -> position.at(2) * angle_direction; //3
     RL_yaw_angle = msg -> position.at(3) * angle_direction;
     double FL_yaw_deg = FL_yaw_angle * RAD_DEG;
     double FR_yaw_deg = FR_yaw_angle * RAD_DEG;
     double RL_yaw_deg = RL_yaw_angle * RAD_DEG;
     double RR_yaw_deg = RR_yaw_angle * RAD_DEG;
-    // ROS_INFO("Yaw angle: (%f, %f, %f, %f)", FL_yaw_deg,FR_yaw_deg,RL_yaw_deg,RR_yaw_deg);
+
+    // double test_1 = RAD_DEG* msg -> position.at(0) * angle_direction;
+    // double test_2 = RAD_DEG* msg -> position.at(1) * angle_direction;
+    // double test_3 = RAD_DEG* msg -> position.at(2) * angle_direction;
+    // ROS_INFO("Yaw angle: (%f, %f, %f, %f, %f, %f, %f)", test_1, test_2, test_3, FL_yaw_deg,FR_yaw_deg,RL_yaw_deg,RR_yaw_deg);
 }
 //cmd velocity callback
 void MBZIRC_ROBOT::cmd_vel_callback(const geometry_msgs::Twist::ConstPtr& msg) {

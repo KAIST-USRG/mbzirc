@@ -7,7 +7,7 @@ scale_linear:
 axis_angular:
   yaw: 3
 scale_angular:
-  yaw: 1.0
+  yaw: 0.8
 enable_button: 0
 toggle_enable: true
 enable_turbo_button: 8

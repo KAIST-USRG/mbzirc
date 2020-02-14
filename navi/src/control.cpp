@@ -36,6 +36,7 @@ private:
     ros::Publisher heading_direction_cmd;
     ros::Subscriber ekf_odom;
     ros::Subscriber goal;
+    ros::Subscriber outdoor_srv_running_sub;
     ros::NodeHandle nh;
     float yaw_x;
     float yaw_y;
@@ -80,6 +81,7 @@ private:
     int len=0;
     int i=0;
     int k=0;
+    bool outdoor_srv_running;
 
 public:
     Control()
@@ -88,8 +90,9 @@ public:
         vector_direction_cmd  = nh.advertise<geometry_msgs::PoseStamped>("/check_vector",100);
         heading_direction_cmd  = nh.advertise<geometry_msgs::PoseStamped>("/check_cmd_heading",100);
         ekf_odom = nh.subscribe("/outdoor_nav/odometry/EKF_estimated",1,&Control::ekf_odom_callback, this);
-        goal     = nh.subscribe("goal_point", 1, &Control::goal_point_callback, this);
-
+        goal = nh.subscribe("/goal_point", 1, &Control::goal_point_callback, this);
+        outdoor_srv_running_sub = nh.subscribe("/outdoor_srv_running", 1, &Control::outdoor_srv_running_callback, this);
+        
 
     }
     void clockwise_rotation(float x, float y, float angle, float move_heading){
@@ -220,7 +223,7 @@ public:
         else if(cmd_out < -max_yaw_rate){
             cmd_out = -max_yaw_rate;
         }
-        ROS_INFO("Heading error: %f, error stack: %f, CMD: %f", error,error_stack, cmd_out);
+        // ROS_INFO("Heading error: %f, error stack: %f, CMD: %f", error,error_stack, cmd_out);
 
 
         vel.angular.z = cmd_out;
@@ -257,26 +260,41 @@ public:
         // vel.angular.z = vel.angular.z * (1-weight) + (weight) * angular_z_prev;
 
 
- 
+        // if (move_to_goal == true){
+        //     pub_cmd.publish(vel);
+        // }
+        // // if ((sqrt(pow((goal_point_x-current_point_x),2)+pow((goal_point_y-current_point_y),2))) < 2 && (sqrt(pow((goal_point_x-current_point_x),2)+pow((goal_point_y-current_point_y),2))) > 1){
+        // //     move_to_goal = false;
+        // // }
+        // if ((sqrt(pow((goal_point_x-current_point_x),2)+pow((goal_point_y-current_point_y),2))) < 1){
+        //     move_to_goal = false;        
+        //     vel.linear.x = 0;
+        //     vel.linear.y = 0;
+        //     vel.angular.z = 0;
+        //     pub_cmd.publish(vel);
+        // }
 
-
-
-        if (move_to_goal == true){
+        bool move_due_to_outdoor_srv_running = false;
+        if (outdoor_srv_running == true){
+            move_due_to_outdoor_srv_running = outdoor_srv_running;
+        }
+        
+        if (move_due_to_outdoor_srv_running == true){
             pub_cmd.publish(vel);
+
+            if ((sqrt(pow((goal_point_x-current_point_x),2)+pow((goal_point_y-current_point_y),2))) < 1){
+                move_to_goal = false;        
+                vel.linear.x = 0;
+                vel.linear.y = 0;
+                vel.angular.z = 0;
+                pub_cmd.publish(vel);
+                }
         }
-        if ((sqrt(pow((goal_point_x-current_point_x),2)+pow((goal_point_y-current_point_y),2))) < 2 && (sqrt(pow((goal_point_x-current_point_x),2)+pow((goal_point_y-current_point_y),2))) > 1){
-            move_to_goal = false;
-        }
-        if ((sqrt(pow((goal_point_x-current_point_x),2)+pow((goal_point_y-current_point_y),2))) < 1){
-            move_to_goal = false;        
-            vel.linear.x = 0;
-            vel.linear.y = 0;
-            vel.angular.z = 0;
-            pub_cmd.publish(vel);
-        }
+
         x_vel_vec_prev = vel.linear.x;
         y_vel_vec_prev = vel.linear.y;
         angular_z_prev = vel.angular.z;
+        // std::cout<<move_to_goal<<std::endl;
 
 
     }
@@ -294,15 +312,20 @@ public:
         goal_heading = yaw_;
         yaw_x_ = cos(yaw_);
         yaw_y_ = sin(yaw_);
-        move_to_goal = true;    
+        move_to_goal = true;
+        ROS_INFO("&d", move_to_goal);
+    }
+
+    void outdoor_srv_running_callback(const std_msgs::Bool& msg){
+        outdoor_srv_running = msg.data;
     }
 };
 
 int main(int argc, char **argv){
     ros::init(argc, argv, "Control");
     Control cont;
-
     ros::spin();
+    
 
     return 0;
 }

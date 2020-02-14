@@ -56,6 +56,7 @@
 
 
 // #define DEBUG
+// #define DEBUG_NOVISION
 #define DELAY                 1.0         // for sleep function => robot updating states => 0.4 s fail (?)
 #define PLANNING_TIMEOUT      2
 #define NUM_SUM               3           // to average the pose message
@@ -63,7 +64,7 @@
 #define DIST_EE_TO_MAGNET     0.077
 #define DIST_CAM_TO_EE        -0.015
 #define DIST_LIDAR_TO_MAGNET  0.06
-#define Z_OFFSET              0.15
+#define Z_OFFSET              0.05
 #define BELT_BASE_HEIGHT      0.26
 
 // color code
@@ -349,6 +350,7 @@ public:
 
     }
     
+    #ifndef DEBUG_NOVISION
     ROS_INFO("============== SERVICE CLIENT to Camera node: Visual Servo XY ==============");
     {
       // reset flag used in this Service
@@ -463,7 +465,7 @@ public:
       }
       
     }
-
+    #endif
 
     ROS_INFO("====================== Trigger to read data from camera ======================");
     {
@@ -667,8 +669,8 @@ public:
 
       joint_group_positions[0] = PI;  // Radian
       joint_group_positions[1] = -PI/2;
-      joint_group_positions[2] = PI/180 * 45;
-      joint_group_positions[3] = 2 * PI - PI/180 * 45;
+      joint_group_positions[2] = PI/180 * 50;
+      joint_group_positions[3] = 2 * PI - PI/180 * 50;
       joint_group_positions[4] = -PI/2;
       joint_group_positions[5] = 0;
       
@@ -688,7 +690,8 @@ public:
 
       move_group.move();                      // BLOCKING FUNCTION
 
-      moveXYZSlowly(0, 0.10, 0, 0.1, 0.1, false);
+      // GO front a so that the orange brick does not hit GPS antenna
+      moveXYZSlowly(0, 0.10, 0, 0.1, 0.1, false); 
 
       res.success = true;
       res.workspace_reachable = true;
@@ -730,8 +733,8 @@ public:
       move_group.setJointValueTarget(joint_group_positions);
       move_group.setPlanningTime(PLANNING_TIMEOUT);
       move_group.setGoalJointTolerance(0.01);
-      move_group.setMaxVelocityScalingFactor(0.3);
-      move_group.setMaxAccelerationScalingFactor(0.3);
+      move_group.setMaxVelocityScalingFactor(0.1);
+      move_group.setMaxAccelerationScalingFactor(0.1);
 
       bool success{move_group.plan(my_plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS};
       ROS_INFO_NAMED("tutorial", "moveToStorageSide Step 2: Turn %s", success ? "SUCCEEDED" : "FAILED");
@@ -753,40 +756,44 @@ public:
 
       if (req.brick_container_side == LEFT)
       {
-        target_pose.position.x = -0.565;
+        target_pose.position.x = -0.575;
         target_pose.position.y = -0.1;
+        target_pose.position.z =  0.70;
+
       }else
       {
-        target_pose.position.x = 0.565;
+        target_pose.position.x = 0.575;
         target_pose.position.y = 0.1;
+        target_pose.position.z = 0.70;
       }
       
-      if (req.order_of_this_brick == 1)
-      {
-        target_pose.position.z = 0.40;
-        waypoints_to_storage.push_back(target_pose);
+      // if (req.order_of_this_brick == 1)
+      // {
+      //   target_pose.position.z = 0.40;
+      //   waypoints_to_storage.push_back(target_pose);
 
-      }else if (req.order_of_this_brick == 2)
-      {
-        target_pose.position.z = 0.40;
-        waypoints_to_storage.push_back(target_pose);
+      // }else if (req.order_of_this_brick == 2)
+      // {
+      //   target_pose.position.z = 0.40;
+      //   waypoints_to_storage.push_back(target_pose);
 
-      }else if (req.order_of_this_brick == 3)
-      {
-        target_pose.position.z = 0.60;
-        waypoints_to_storage.push_back(target_pose);
+      // }else if (req.order_of_this_brick == 3)
+      // {
+      //   target_pose.position.z = 0.60;
+      //   waypoints_to_storage.push_back(target_pose);
 
-      }else if (req.order_of_this_brick == 4)
-      {
-        target_pose.position.z = 0.60;
-        waypoints_to_storage.push_back(target_pose);
+      // }else if (req.order_of_this_brick == 4)
+      // {
+      //   target_pose.position.z = 0.60;
+      //   waypoints_to_storage.push_back(target_pose);
 
-      }else if (req.order_of_this_brick == 5)
-      {
-        // Don't change the height
-        waypoints_to_storage.push_back(target_pose);
-      }
+      // }else if (req.order_of_this_brick == 5)
+      // {
+      //   // Don't change the height
+      //   waypoints_to_storage.push_back(target_pose);
+      // }
       
+      waypoints_to_storage.push_back(target_pose);
       move_group.setPlanningTime(PLANNING_TIMEOUT);
 
       moveit_msgs::RobotTrajectory trajectory_to_storage;
@@ -835,6 +842,7 @@ public:
         return true;
       }
     }
+   
 
     ROS_INFO("//  ====================== Go down the container ====================== //");
     {
@@ -845,7 +853,7 @@ public:
 
       if (req.order_of_this_brick == 1)
       {
-        target_pose.position.z = 0;
+        target_pose.position.z = 0.05;
         waypoints_down_to_storage.push_back(target_pose);
       }else if (req.order_of_this_brick == 2)
       {
@@ -912,18 +920,17 @@ public:
       detachBrick();
       deleteObject();
     }
-
-    
+ 
 
     ROS_INFO("//  ====================== move back to the default position  ====================== //");
     {
-      if (req.order_of_this_brick == 1 || req.order_of_this_brick == 2)
+      if (req.order_of_this_brick <= 4) // move up from the container
       {
         std::vector<geometry_msgs::Pose> waypoints_up_from_storage;
         target_pose = move_group.getCurrentPose().pose; // Cartesian Path from the current position
         ros::Duration(0.5).sleep();
         target_pose = move_group.getCurrentPose().pose; // Cartesian Path from the current position
-        target_pose.position.z = 0.30;
+        target_pose.position.z = 0.70;
         waypoints_up_from_storage.push_back(target_pose);
         move_group.execute(cartesian_plan);
         move_group.setPlanningTime(PLANNING_TIMEOUT);
@@ -948,6 +955,32 @@ public:
         cartesian_plan.trajectory_ = trajectory_up_from_storage;
 
         move_group.execute(cartesian_plan);
+      }
+
+      ROS_INFO("// ============ Turn the robot arm toward the front position ============= //");
+      {
+        current_state = move_group.getCurrentState();
+        ros::Duration(0.5).sleep();
+        current_state = move_group.getCurrentState();
+        current_state->copyJointGroupPositions(joint_model_group, joint_group_positions);
+
+        joint_group_positions[0] = PI; // Turn UR toward the container RIGHT side
+
+        move_group.setJointValueTarget(joint_group_positions);
+        move_group.setPlanningTime(PLANNING_TIMEOUT);
+        move_group.setGoalJointTolerance(0.01);
+        move_group.setMaxVelocityScalingFactor(0.1);
+        move_group.setMaxAccelerationScalingFactor(0.1);
+
+        bool success{move_group.plan(my_plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS};
+        ROS_INFO_NAMED("tutorial", "Turn toward the front position %s", success ? "SUCCEEDED" : "FAILED");
+
+
+        #ifdef DEBUG
+          visual_tools.prompt("Press 'next' to front position");
+        #endif
+
+        move_group.move();                      // BLOCKING FUNCTION
       }
 
       ROS_INFO("//  ====================== UR5 base side: back to Default position  ====================== //");
@@ -1116,6 +1149,7 @@ public:
 
     }
   }
+
 
   void moveToDafaultFlagCallback(const std_msgs::Bool::ConstPtr& msg)
   {
@@ -1548,16 +1582,18 @@ public:
 
     if (container_direction == LEFT)
     {
-      ur5_base_slide_srv.request.value = -1600000;
+      // ur5_base_slide_srv.request.value = -1600000;
+      ur5_base_slide_srv.request.value = -3000000;
     }else
     {
-      ur5_base_slide_srv.request.value = -2350000;
+      // ur5_base_slide_srv.request.value = -2350000;
+      ur5_base_slide_srv.request.value = -3170000;
     }
 
     // call the service
     if (ur5_base_slide_sc.call(ur5_base_slide_srv))
     {
-      ROS_INFO("slide_ur5_base_orange_backward 1111111111");
+      
       if(ur5_base_slide_srv.response.comm_result == true)
       {
           ROS_INFO("slide_ur5_base_orange_backward");
@@ -1582,7 +1618,8 @@ public:
     ur5_base_slide_srv.request.id = 7;
     ur5_base_slide_srv.request.addr_name = "Goal_Position";
 
-    ur5_base_slide_srv.request.value = -200000;
+    ur5_base_slide_srv.request.value = -390000;
+    // ur5_base_slide_srv.request.value = -200000;
 
     // call the service
     if (ur5_base_slide_sc.call(ur5_base_slide_srv))

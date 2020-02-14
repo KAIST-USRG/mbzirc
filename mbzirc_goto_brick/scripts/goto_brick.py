@@ -85,7 +85,7 @@ class GotoBrick:
         pass
 
     def is_arrived(self):
-        if 0.0 < self.raw_x < 0.5 and 0.0 < self.raw_y < 0.4:
+        if 0.0 < self.raw_x < 0.5 and -0.4 < self.raw_y < 0.4:
             return True
         else:
             return False
