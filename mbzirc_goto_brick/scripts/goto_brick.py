@@ -16,6 +16,7 @@ class GotoBrick:
         
         self.x_axis_reduce_gain          = rospy.get_param('~x_gain', 0.1)
         self.y_axis_reduce_gain          = rospy.get_param('~y_gain', 0.1)
+        self.yaw_axis_reduce_gain        = rospy.get_param('~yaw_gain', 0.1)
         self.service_control             = rospy.get_param('~service_control', True)
 
         self.raw_x                       = -1.0
@@ -74,7 +75,15 @@ class GotoBrick:
             #goto brick
             control_speed.linear.x = self.raw_x * self.x_axis_reduce_gain
             control_speed.linear.y = self.raw_y * self.y_axis_reduce_gain
-            control_speed.angular.z = 3.0 * math.pi / 180 #convert degree/s to radian/s. 
+            sum_quaternion = 
+                pose_msg.pose.orientation.x +
+                pose_msg.pose.orientation.y +
+                pose_msg.pose.orientation.z +
+                pose_msg.pose.orientation.w
+            if sum_quaternion < 0.1:
+                control_speed.angular.z = 0.0
+            else:
+                control_speed.angular.z = self.raw_yaw * math.pi / 180 * self.yaw_axis_reduce_gain #convert degree/s to radian/s. 
 
         self.result_cmd_vel = control_speed
         
