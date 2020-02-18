@@ -71,7 +71,7 @@ private:
     float goal_point_orientation_w =1;
     float current_heading;
     float goal_heading;
-    float max_x_vel =1.5;
+    float max_x_vel =0.7;
     float scailing_factor;
     float det;
     float dot;
@@ -201,7 +201,7 @@ public:
         }
         double error_stack = error_stack + error * 0.05;
         double max_yaw_rate = 0.4;
-        if (fabs(error) < 1 / 57.3 || sqrt(pow(msg.twist.twist.linear.x,2)+ pow(msg.twist.twist.linear.y,2)) < 0.01){
+        if (fabs(error) < 1 / 57.3 || sqrt(pow(msg.twist.twist.linear.x,2)+ pow(msg.twist.twist.linear.y,2)) < 0.05){
             error_stack = 0;
         }
 
@@ -223,13 +223,13 @@ public:
         else if(cmd_out < -max_yaw_rate){
             cmd_out = -max_yaw_rate;
         }
-        // ROS_INFO("Heading error: %f, error stack: %f, CMD: %f", error,error_stack, cmd_out);
+        ROS_INFO("Heading error: %f, error stack: %f, CMD: %f", error,error_stack, cmd_out);
 
 
         vel.angular.z = cmd_out;
         if (fabs(vel.angular.z) > 0.2){
-            vel.linear.x = 0.5 * vel.linear.x;
-            vel.linear.y = 0.5 * vel.linear.y;
+            vel.linear.x = 0.15 * vel.linear.x;
+            vel.linear.y = 0.15 * vel.linear.y;
         }
 
         // if (aco >=355 && aco <=5 ){
@@ -274,14 +274,10 @@ public:
         //     pub_cmd.publish(vel);
         // }
 
-        bool move_due_to_outdoor_srv_running = false;
         if (outdoor_srv_running == true){
-            move_due_to_outdoor_srv_running = outdoor_srv_running;
-        }
-        
-        if (move_due_to_outdoor_srv_running == true){
-            pub_cmd.publish(vel);
-
+            if (move_to_goal ==true){
+                pub_cmd.publish(vel);
+                }
             if ((sqrt(pow((goal_point_x-current_point_x),2)+pow((goal_point_y-current_point_y),2))) < 1){
                 move_to_goal = false;        
                 vel.linear.x = 0;
@@ -290,12 +286,13 @@ public:
                 pub_cmd.publish(vel);
                 }
         }
+        
 
         x_vel_vec_prev = vel.linear.x;
         y_vel_vec_prev = vel.linear.y;
         angular_z_prev = vel.angular.z;
         // std::cout<<move_to_goal<<std::endl;
-
+        outdoor_srv_running = false;
 
     }
     void goal_point_callback(const geometry_msgs::PoseStamped& msg){
@@ -317,7 +314,7 @@ public:
     }
 
     void outdoor_srv_running_callback(const std_msgs::Bool& msg){
-        outdoor_srv_running = msg.data;
+        outdoor_srv_running = true;
     }
 };
 

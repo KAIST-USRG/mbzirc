@@ -74,7 +74,7 @@ class GotoBrick:
             #goto brick
             control_speed.linear.x = self.raw_x * self.x_axis_reduce_gain
             control_speed.linear.y = self.raw_y * self.y_axis_reduce_gain
-            control_speed.angular.z = 0.0
+            control_speed.angular.z = 3.0 * math.pi / 180 #convert degree/s to radian/s. 
 
         self.result_cmd_vel = control_speed
         

@@ -57,6 +57,7 @@
 
 // #define DEBUG
 // #define DEBUG_NOVISION
+// #define DEBUG_NOSLIDE
 #define DELAY                 1.0         // for sleep function => robot updating states => 0.4 s fail (?)
 #define PLANNING_TIMEOUT      2
 #define NUM_SUM               3           // to average the pose message
@@ -66,6 +67,12 @@
 #define DIST_LIDAR_TO_MAGNET  0.06
 #define Z_OFFSET              0.05
 #define BELT_BASE_HEIGHT      0.26
+
+// DynamixelCommand
+#define DYNAMIXEL_ID7_HOME_POSITION 3650000
+#define DYNAMIXEL_ID7_ORANGE_LEFT_CONTAINER_DIFF 5300000
+#define DYNAMIXEL_ID7_ORANGE_RIGHT_CONTAINER_DIFF 5550000
+#define DYNAMIXEL_MARGIN 12
 
 // color code
 #define RED                   0
@@ -95,7 +102,8 @@ bool FLAG_YAW_STOP        = false;
 int   gb_count_pose_msg     = 0;
 int   gb_discard_noise      = 0;
 int   gb_count_move         = 0;  // 0 for moveXY, 1 for moveZ
-int   gb_count_box          = 0;
+int   gb_count_box_left     = 0;
+int   gb_count_box_right    = 0;
 int   gb_servo_stop_signal  = 0;
 float gb_x_sum              = 0;
 float gb_y_sum              = 0;
@@ -350,7 +358,7 @@ public:
 
     }
     
-    #ifndef DEBUG_NOVISION
+  #ifndef DEBUG_NOVISION
     ROS_INFO("============== SERVICE CLIENT to Camera node: Visual Servo XY ==============");
     {
       // reset flag used in this Service
@@ -465,7 +473,7 @@ public:
       }
       
     }
-    #endif
+  #endif
 
     ROS_INFO("====================== Trigger to read data from camera ======================");
     {
@@ -510,7 +518,17 @@ public:
         }
 
         if (go_to_brick_srv.response.success)
-          gb_count_box =  (gb_count_box % 5) + 1;
+        {
+          if (req.target_brick_container_side_left_right == LEFT)
+          {
+            gb_count_box_left =  (gb_count_box_left % 5) + 1;
+          }else
+          {
+            gb_count_box_right =  (gb_count_box_right % 5) + 1;
+          }
+          
+        }
+          
       }
       else {  // fail to request service
         std::cout << "go_to_brick_sc: Failed to call service" << std::endl;
@@ -521,7 +539,14 @@ public:
     
     ROS_INFO("====================== SERVICE CLIENT internal: put on the container ======================");
     {
-      place_in_container_srv.request.order_of_this_brick = gb_count_box;
+      // use proper unloading height based on the # of bricks that already exist
+      if(req.target_brick_container_side_left_right == LEFT)  
+      {
+        place_in_container_srv.request.order_of_this_brick = gb_count_box_left;
+      }else
+      {
+        place_in_container_srv.request.order_of_this_brick = gb_count_box_right;
+      }
       place_in_container_srv.request.brick_container_side = req.target_brick_container_side_left_right;
 
       // service call
@@ -1060,8 +1085,6 @@ public:
         gb_wq_sum = 0;
 
         gb_count_pose_msg = 0; // reset the counter of data to be averaged
-
-
       }
     }else{
       // DON'T get the stream data from camera and clear garbage data
@@ -1251,6 +1274,14 @@ public:
   {
     // dynamixel_state[0] is the position of ID seven
     // ROS_INFO("update position: %d of id = %d", msg->dynamixel_state[0].present_position, msg->dynamixel_state[0].id);
+    if (msg->dynamixel_state[0].id != 7)
+    {
+      ROS_ERROR("CHECK THE ID of DYNAMIXEL/ STATE");
+    }else if (msg->dynamixel_state[0].present_position < DYNAMIXEL_ID7_HOME_POSITION - DYNAMIXEL_MARGIN 
+              || msg->dynamixel_state[0].present_position > DYNAMIXEL_ID7_HOME_POSITION + DYNAMIXEL_MARGIN)
+    {
+      // ROS_ERROR("CHECK THE HOME POSITION VALUE");
+    }
     gb_dynamixel_id7_position = msg->dynamixel_state[0].present_position;
   }
 
@@ -1573,7 +1604,7 @@ public:
     move_group.move();                      // BLOCKING FUNCTION
   }
 
-
+#ifndef DEBUG_NOSLIDE
   bool slide_ur5_base_orange_backward(bool container_direction)
   {
     ur5_base_slide_srv.request.command = "";
@@ -1583,11 +1614,11 @@ public:
     if (container_direction == LEFT)
     {
       // ur5_base_slide_srv.request.value = -1600000;
-      ur5_base_slide_srv.request.value = -3000000;
+      ur5_base_slide_srv.request.value = DYNAMIXEL_ID7_HOME_POSITION - DYNAMIXEL_ID7_ORANGE_LEFT_CONTAINER_DIFF;
     }else
     {
       // ur5_base_slide_srv.request.value = -2350000;
-      ur5_base_slide_srv.request.value = -3170000;
+      ur5_base_slide_srv.request.value = DYNAMIXEL_ID7_HOME_POSITION - DYNAMIXEL_ID7_ORANGE_RIGHT_CONTAINER_DIFF;
     }
 
     // call the service
@@ -1618,7 +1649,7 @@ public:
     ur5_base_slide_srv.request.id = 7;
     ur5_base_slide_srv.request.addr_name = "Goal_Position";
 
-    ur5_base_slide_srv.request.value = -390000;
+    ur5_base_slide_srv.request.value = DYNAMIXEL_ID7_HOME_POSITION;
     // ur5_base_slide_srv.request.value = -200000;
 
     // call the service
@@ -1642,15 +1673,15 @@ public:
 
   void slide_ur5_base_wait_for_finish(long int desired_position)
   {
-    long long int margin = 8;
     while (true)
     {
-      if (gb_dynamixel_id7_position <= desired_position + margin && gb_dynamixel_id7_position >= desired_position - margin)
+      if (gb_dynamixel_id7_position <= desired_position + DYNAMIXEL_MARGIN && gb_dynamixel_id7_position >= desired_position - DYNAMIXEL_MARGIN)
       {
         return; // reaching the derised_position continue ...
       }
     }
   }
+#endif
 
 
   void resetYaw()
@@ -2105,13 +2136,7 @@ public:
     // Subscribe: moveToStorageSide_flag_msg
     // Publish: moveToStorageSide_finished_flag_msg
     if (msg->data == true){
-      gb_count_box += 1;
-      moveToStorageSide_DEBUG(gb_count_box);
-
-      if (gb_count_box == 5)
-      { // Can only store 5 layers in the container
-        gb_count_box = 0;
-      }
+      moveToStorageSide_DEBUG(0);
     }else{
       // DO NOTHING
     }

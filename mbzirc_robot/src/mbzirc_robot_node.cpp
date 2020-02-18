@@ -64,6 +64,11 @@ class MBZIRC_ROBOT
         double RR_linear_speed;
         double wheel_radius = 0.115;
         // Dynamixel_Motor
+        int RR_order = nh.param<int>("/mbzirc_robot_node/dynamixel_RR_order", 3);
+        int FL_order = nh.param<int>("/mbzirc_robot_node/dynamixel_FL_order", 4);
+        int FR_order = nh.param<int>("/mbzirc_robot_node/dynamixel_FR_order", 5);
+        int RL_order = nh.param<int>("/mbzirc_robot_node/dynamixel_RL_order", 6);
+
         ros::Subscriber dynamixel_position_sub;
         double FL_yaw_angle; // unit : [rad]
         double FR_yaw_angle;
@@ -130,7 +135,7 @@ void MBZIRC_ROBOT::odom_publisher()
 
     odom_msg.header.stamp = imu_msg.header.stamp;
     odom_msg.header.frame_id = "odom";
-    odom_msg.child_frame_id = "base_link";
+    odom_msg.child_frame_id = "base_footprint";
     tf2::Quaternion quat;
     geometry_msgs::Quaternion quat_msg;
     if (rotational_motion ==false ){
@@ -148,6 +153,21 @@ void MBZIRC_ROBOT::odom_publisher()
         odom_msg.twist.twist.linear.y = 0.5 * (RL_linear_speed + RR_linear_speed) * sin(0.5*(RL_yaw_angle + RR_yaw_angle));
         // ROS_INFO("2");
     }
+    // if (rotational_motion ==false ){
+    //     x_delta = 0.5 * (FL_linear_speed + FR_linear_speed) * cos(0.5*(FL_yaw_angle + FR_yaw_angle)) * dt;
+    //     y_delta = 0.5 * (FL_linear_speed + FR_linear_speed) * sin(0.5*(RL_yaw_angle + RR_yaw_angle)) * dt;
+    //     odom_msg.twist.twist.linear.x = 0.5 * (FL_linear_speed + FR_linear_speed) * cos(0.5*(FL_yaw_angle + FR_yaw_angle));
+    //     odom_msg.twist.twist.linear.y = 0.5 * (FL_linear_speed + FR_linear_speed) * sin(0.5*(FL_yaw_angle + FR_yaw_angle));
+    //     // ROS_INFO("1");
+    //     // // odom_msg.pose.pose.orientation = odom_msg.pose.pose.orientation + quat_msg;
+    // }
+    // else if(rotational_motion == true){
+    //     x_delta = 0;
+    //     y_delta = 0;
+    //     odom_msg.twist.twist.linear.x = 0.5 * (FL_linear_speed + FR_linear_speed) * cos(0.5*(FL_yaw_angle + FR_yaw_angle));
+    //     odom_msg.twist.twist.linear.y = 0.5 * (FL_linear_speed + FR_linear_speed) * sin(0.5*(FL_yaw_angle + FR_yaw_angle));
+    //     // ROS_INFO("2");
+    // }
     else if(low_speed == true){
         x_delta = 0;
         y_delta = 0;
@@ -220,15 +240,15 @@ void MBZIRC_ROBOT::wheel_encoder_RR_callback(const std_msgs::Int32::ConstPtr& ms
 //Dynamixel Yaw angle
 void MBZIRC_ROBOT::dynamixel_position_callback(const sensor_msgs::JointState::ConstPtr& msg) {
     //Matching position data to robot system --> it is notified by Donghee.
-    RR_yaw_angle = msg -> position.at(0) * angle_direction; // unit : [rad] //1
-    FL_yaw_angle = msg -> position.at(1) * angle_direction; //2
-    FR_yaw_angle = msg -> position.at(2) * angle_direction; //3
-    RL_yaw_angle = msg -> position.at(3) * angle_direction;
+    RR_yaw_angle = msg -> position.at(RR_order) * angle_direction; // unit : [rad] //1
+    FL_yaw_angle = msg -> position.at(FL_order) * angle_direction; //2
+    FR_yaw_angle = msg -> position.at(FR_order) * angle_direction; //3
+    RL_yaw_angle = msg -> position.at(RL_order) * angle_direction; //4
     double FL_yaw_deg = FL_yaw_angle * RAD_DEG;
     double FR_yaw_deg = FR_yaw_angle * RAD_DEG;
     double RL_yaw_deg = RL_yaw_angle * RAD_DEG;
     double RR_yaw_deg = RR_yaw_angle * RAD_DEG;
-
+    
     // double test_1 = RAD_DEG* msg -> position.at(0) * angle_direction;
     // double test_2 = RAD_DEG* msg -> position.at(1) * angle_direction;
     // double test_3 = RAD_DEG* msg -> position.at(2) * angle_direction;

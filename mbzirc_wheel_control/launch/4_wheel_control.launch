@@ -6,7 +6,7 @@
   <!--node pkg="tf" type="static_transform_publisher" name="base2gps" args="0.0 0.0 0.0 0.0 0.0 0.0 /base_link /gps 40" /-->
 
   <include file="$(find mbzirc_wheel_control)/launch/microstrain.launch">
-      <arg name="port" value="/dev/ttyACM1" /> <!-- ttyACM0 -->
+      <arg name="port" value="/dev/ttyACM3" /> <!-- ttyACM0 -->
   </include>
   <include file="$(find ublox_gps)/launch/ublox_device.launch"/>
   <!--include file="$(find mbzirc_wheel_control)/launch/VLP16_points.launch" /-->

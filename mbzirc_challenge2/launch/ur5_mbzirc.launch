@@ -22,7 +22,7 @@
 
   <!-- Initialize 1D lidar node -->
   <node name="lidar_1D" pkg="teraranger" type="evo" respawn="false" output="screen">
-    <param name="portname" value="/dev/ttyACM4" />
+    <param name="portname" value="/dev/ttyACM3" />
     <param name="sensor_type" value="Evo_3m" />
   </node>
 

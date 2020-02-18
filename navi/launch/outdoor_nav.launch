@@ -1,8 +1,16 @@
 <?xml version="1.0"?>
 <launch>
 
+  <arg name="mbzirc_fixed_latitude" default="24.4550773" />
+  <arg name="mbzirc_fixed_longitude" default="54.3729277" />
+
   <!-- Robot odometry-->
-  <node pkg="mbzirc_robot" type="mbzirc_robot_node" name="mbzirc_robot_node" output="screen" respawn="True" />
+  <node pkg="mbzirc_robot" type="mbzirc_robot_node" name="mbzirc_robot_node" output="screen" respawn="True" >
+	<param name="/dynamixel_RR_order" value="1" type="int" />
+	<param name="/dynamixel_FL_order" value="2" type="int" />
+	<param name="/dynamixel_FR_order" value="3" type="int" />
+	<param name="/dynamixel_RL_order" value="4" type="int" />
+  </node>
 
   <!-- Static Transformation -->
   <node pkg="tf" type="static_transform_publisher" name="fixed_odom" args="0.0 0.0 0.0 0.0 0.0 0.0 /map /odom 40" />
@@ -18,11 +26,18 @@
       <!--remap from="odometry/filtered" to="odometry/filtered_map" /-->
       <remap from="gps/fix" to="/latlon/fix"/>
       <remap from="imu/data" to="/gx5/imu/data"/>
+      <param name="/lat_fixed_point" value="$(arg mbzirc_fixed_latitude)" type="double" />
+      <param name="/lon_fixed_point" value="$(arg mbzirc_fixed_longitude)" type="double" />
+	
   </node>
 
   <!-- EKF node-->
+  <!--Estimating pose in the world-->
   <node pkg="navi" type="navi_node" name="navi_node" output="screen" respawn="True" />
-
+  <!--Calculating /move_base/cmd_vel-->
+  <!--node pkg="navi" type="controller_node" name="control" /-->
+  <!--Load the waypoint and pub waypoint PoseArray-->
+  <!--node pkg="navi" name="waypoint" type="waypoint.py" output="screen"/-->
   </group>
 
   <!-- Move base node-->

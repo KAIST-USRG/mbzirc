@@ -18,15 +18,15 @@ steer4:
   ID: 4
   Return_Delay_Time: 0
   Operating_Mode: 4
-#left_conveyer:
-#  ID: 5
-#  Return_Delay_Time: 0
-#  Operating_Mode: 1
+  #left_conveyer:
+  #  ID: 5
+  #  Return_Delay_Time: 0
+  #  Operating_Mode: 1
   #right_conveyer:
   #  ID: 6
   #  Return_Delay_Time: 0
   #  Operating_Mode: 1
-  #arm_slide:
-  #  ID: 7
-  #  Return_Delay_Time: 0
-  #  Operating_Mode: 4
+arm_slide:
+  ID: 7
+  Return_Delay_Time: 0
+  Operating_Mode: 4
