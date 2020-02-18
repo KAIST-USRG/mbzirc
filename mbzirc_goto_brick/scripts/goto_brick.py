@@ -16,7 +16,7 @@ class GotoBrick:
         
         self.x_axis_reduce_gain          = rospy.get_param('~x_gain', 0.1)
         self.y_axis_reduce_gain          = rospy.get_param('~y_gain', 0.1)
-        self.yaw_axis_reduce_gain        = rospy.get_param('~yaw_gain', 0.1)
+        self.yaw_axis_reduce_gain        = rospy.get_param('~yaw_gain', 0.2)
         self.service_control             = rospy.get_param('~service_control', True)
 
         self.raw_x                       = -1.0
