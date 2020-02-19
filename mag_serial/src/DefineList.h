@@ -24,7 +24,6 @@ using namespace std;
 // #define DEBUG_MODE_Agent_List
 #define ROS_FREQ  500.0    // while loop frequency [Hz]
 
-//#define PORT1 		"/dev/serial/by-id/usb-FTDI_FT232R_USB_UART_A506LO7L-if00-port0"
 #define PORT1 		"/dev/ttySTM"
 #define BAUDRATE 	115200
 

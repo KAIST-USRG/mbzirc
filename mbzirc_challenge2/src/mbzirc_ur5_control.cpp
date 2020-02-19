@@ -65,13 +65,16 @@
 #define DIST_EE_TO_MAGNET     0.077
 #define DIST_CAM_TO_EE        -0.015
 #define DIST_LIDAR_TO_MAGNET  0.06
-#define Z_OFFSET              0.05
+#define Z_OFFSET              0.03
 #define BELT_BASE_HEIGHT      0.26
 
 // DynamixelCommand
-#define DYNAMIXEL_ID7_HOME_POSITION 3650000
+#define DYNAMIXEL_ID7_HOME_POSITION -365000
 #define DYNAMIXEL_ID7_ORANGE_LEFT_CONTAINER_DIFF 5300000
-#define DYNAMIXEL_ID7_ORANGE_RIGHT_CONTAINER_DIFF 5550000
+#define DYNAMIXEL_ID7_ORANGE_RIGHT_CONTAINER_DIFF 5535000
+
+#define DYNAMIXEL_ID7_GREEN_RIGHT_1_CONTAINER_DIFF 0
+#define DYNAMIXEL_ID7_GREEN_RIGHT_2_CONTAINER_DIFF 0
 #define DYNAMIXEL_MARGIN 12
 
 // color code
@@ -104,6 +107,7 @@ int   gb_discard_noise      = 0;
 int   gb_count_move         = 0;  // 0 for moveXY, 1 for moveZ
 int   gb_count_box_left     = 0;
 int   gb_count_box_right    = 0;
+int   gb_count_box_green    = 0;
 int   gb_servo_stop_signal  = 0;
 float gb_x_sum              = 0;
 float gb_y_sum              = 0;
@@ -326,36 +330,6 @@ public:
     ROS_INFO("=============== Adjust Default Position  ===============");
     {
       moveToDefault(RIGHT);
-
-      // Need the EE to be parallel to the ground
-      current_state = move_group.getCurrentState();
-      ros::Duration(0.5).sleep();
-      current_state = move_group.getCurrentState();
-      // Next get the current set of joint values for the group.
-      std::vector<double> joint_group_positions;
-      current_state->copyJointGroupPositions(joint_model_group, joint_group_positions);
-      joint_group_positions[0] = PI;  // Radian
-      joint_group_positions[1] = -PI/2;
-      joint_group_positions[2] = PI/180*60;
-      joint_group_positions[3] = 2 * PI - PI/180 * 60;
-      joint_group_positions[4] = -PI/2;
-      joint_group_positions[5] = 0;
-      move_group.setJointValueTarget(joint_group_positions);
-      move_group.setMaxVelocityScalingFactor(0.01);
-      move_group.setMaxAccelerationScalingFactor(0.01);
-      move_group.setPlanningTime(PLANNING_TIMEOUT);
-      move_group.setGoalJointTolerance(0.00000001);
-
-
-      bool success{move_group.plan(my_plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS};
-      ROS_INFO_NAMED("tutorial", "Make EE parallel to the ground: %s", success ? "SUCCEEDED" : "FAILED");
-
-      // #ifdef DEBUG
-        // visual_tools.prompt("Press 'next' to make EE parallel to the ground");
-      // #endif
-
-      move_group.move();                      // BLOCKING FUNCTION
-
     }
     
   #ifndef DEBUG_NOVISION
@@ -514,6 +488,7 @@ public:
         {
           // Return to mission maneger
           res.workspace_reachable = false; 
+          res.success_or_fail = false;  
           return true;
         }
 
@@ -525,6 +500,11 @@ public:
           }else
           {
             gb_count_box_right =  (gb_count_box_right % 5) + 1;
+          }
+
+          if (req.target_brick_color_code == GREEN)
+          {
+            gb_count_box_green += 1;
           }
           
         }
@@ -548,6 +528,7 @@ public:
         place_in_container_srv.request.order_of_this_brick = gb_count_box_right;
       }
       place_in_container_srv.request.brick_container_side = req.target_brick_container_side_left_right;
+      place_in_container_srv.request.brick_color_code = req.target_brick_color_code;
 
       // service call
       if(place_in_container_sc.call(place_in_container_srv)) 
@@ -783,13 +764,13 @@ public:
       {
         target_pose.position.x = -0.575;
         target_pose.position.y = -0.1;
-        target_pose.position.z =  0.70;
+        target_pose.position.z =  0.75;
 
       }else
       {
         target_pose.position.x = 0.575;
         target_pose.position.y = 0.1;
-        target_pose.position.z = 0.70;
+        target_pose.position.z = 0.75;
       }
       
       // if (req.order_of_this_brick == 1)
@@ -857,90 +838,109 @@ public:
       move_group.execute(cartesian_plan);
     }
 
+    #ifndef DEBUG_NOSLIDE
     ROS_INFO("//  ====================== Slide the UR5 base ====================== //");
     {
       // DYNAMIXEL service
-      bool success = slide_ur5_base_orange_backward(req.brick_container_side);
-      if (!success)
+      bool success;
+      if (req.brick_color_code == GREEN)
+      {
+        if (gb_count_box_green <= 5)
+        {
+          success = slide_ur5_base_green_backward(req.brick_container_side, 0);
+        }else
+        {
+          success = slide_ur5_base_green_backward(req.brick_container_side, 1);
+        }
+
+      }else
+      {
+        success = slide_ur5_base_orange_backward(req.brick_container_side);
+      }
+
+      if (!success) // moving the base of UR5 failed
       {
         res.success = false;
         return true;
       }
+      
+      
+     
     }
-   
+    #endif
 
-    ROS_INFO("//  ====================== Go down the container ====================== //");
-    {
-      std::vector<geometry_msgs::Pose> waypoints_down_to_storage;
-      target_pose = move_group.getCurrentPose().pose; // Cartesian Path from the current position
-      ros::Duration(0.5).sleep();
-      target_pose = move_group.getCurrentPose().pose; // Cartesian Path from the current position
+    // ROS_INFO("//  ====================== Go down the container ====================== //");
+    // {
+    //   std::vector<geometry_msgs::Pose> waypoints_down_to_storage;
+    //   target_pose = move_group.getCurrentPose().pose; // Cartesian Path from the current position
+    //   ros::Duration(0.5).sleep();
+    //   target_pose = move_group.getCurrentPose().pose; // Cartesian Path from the current position
 
-      if (req.order_of_this_brick == 1)
-      {
-        target_pose.position.z = 0.05;
-        waypoints_down_to_storage.push_back(target_pose);
-      }else if (req.order_of_this_brick == 2)
-      {
-        target_pose.position.z = 0.15;
-        waypoints_down_to_storage.push_back(target_pose);
-      }else if (req.order_of_this_brick == 3)
-      {
-        target_pose.position.z = 0.35;
-        waypoints_down_to_storage.push_back(target_pose);
-      }else if (req.order_of_this_brick == 4)
-      {
-        target_pose.position.z = 0.55;
-        waypoints_down_to_storage.push_back(target_pose);
-      }else if (req.order_of_this_brick == 5)
-      {
-        // Do nothing
-      }
+    //   if (req.order_of_this_brick == 1)
+    //   {
+    //     target_pose.position.z = 0.05;
+    //     waypoints_down_to_storage.push_back(target_pose);
+    //   }else if (req.order_of_this_brick == 2)
+    //   {
+    //     target_pose.position.z = 0.15;
+    //     waypoints_down_to_storage.push_back(target_pose);
+    //   }else if (req.order_of_this_brick == 3)
+    //   {
+    //     target_pose.position.z = 0.35;
+    //     waypoints_down_to_storage.push_back(target_pose);
+    //   }else if (req.order_of_this_brick == 4)
+    //   {
+    //     target_pose.position.z = 0.55;
+    //     waypoints_down_to_storage.push_back(target_pose);
+    //   }else if (req.order_of_this_brick == 5)
+    //   {
+    //     // Do nothing
+    //   }
 
-      move_group.setPlanningTime(PLANNING_TIMEOUT);
+    //   move_group.setPlanningTime(PLANNING_TIMEOUT);
 
-      moveit_msgs::RobotTrajectory trajectory_down_to_storage;
-      for(int i = 0; i < 3; i++)
-      {
-        fraction = move_group.computeCartesianPath(waypoints_down_to_storage, eef_step, jump_threshold, trajectory_down_to_storage);
-        if (fraction == 1.0)
-          break;
-      }
-      // ================================= modify the velocity of Cartesian path ================================= //
-      // First create a RobotTrajectory object
-      robot_trajectory::RobotTrajectory rt(move_group.getCurrentState()->getRobotModel(), "manipulator");
-      // Second get a RobotTrajectory from trajectory
-      rt.setRobotTrajectoryMsg(*move_group.getCurrentState(), trajectory_down_to_storage);
-      // Thrid create a IterativeParabolicTimeParameterization object
-      trajectory_processing::IterativeParabolicTimeParameterization iptp;
-      // Fourth compute computeTimeStamps
-      bool success = iptp.computeTimeStamps(rt, 0.1, 0.1);
-      rt.getRobotTrajectoryMsg(trajectory_down_to_storage);
+    //   moveit_msgs::RobotTrajectory trajectory_down_to_storage;
+    //   for(int i = 0; i < 3; i++)
+    //   {
+    //     fraction = move_group.computeCartesianPath(waypoints_down_to_storage, eef_step, jump_threshold, trajectory_down_to_storage);
+    //     if (fraction == 1.0)
+    //       break;
+    //   }
+    //   // ================================= modify the velocity of Cartesian path ================================= //
+    //   // First create a RobotTrajectory object
+    //   robot_trajectory::RobotTrajectory rt(move_group.getCurrentState()->getRobotModel(), "manipulator");
+    //   // Second get a RobotTrajectory from trajectory
+    //   rt.setRobotTrajectoryMsg(*move_group.getCurrentState(), trajectory_down_to_storage);
+    //   // Thrid create a IterativeParabolicTimeParameterization object
+    //   trajectory_processing::IterativeParabolicTimeParameterization iptp;
+    //   // Fourth compute computeTimeStamps
+    //   bool success = iptp.computeTimeStamps(rt, 0.1, 0.1);
+    //   rt.getRobotTrajectoryMsg(trajectory_down_to_storage);
 
-      ROS_INFO_NAMED("tutorial", "_placeInContainerServiceCallback: go down the container (%.2f%% achieved)", fraction * 100.0);
-      cartesian_plan.trajectory_ = trajectory_down_to_storage;
+    //   ROS_INFO_NAMED("tutorial", "_placeInContainerServiceCallback: go down the container (%.2f%% achieved)", fraction * 100.0);
+    //   cartesian_plan.trajectory_ = trajectory_down_to_storage;
 
-      // Visualize the plan in RViz
-      visual_tools.deleteAllMarkers();
-      visual_tools.publishText(text_pose, "Joint Space Goal", rvt::WHITE, rvt::XLARGE);
-      visual_tools.publishPath(waypoints_down_to_storage, rvt::LIME_GREEN, rvt::SMALL);
-      for (std::size_t i = 0; i < waypoints_down_to_storage.size(); ++i)
-        visual_tools.publishAxisLabeled(waypoints_down_to_storage[i], "pt" + std::to_string(i), rvt::SMALL);
-      visual_tools.trigger();
+    //   // Visualize the plan in RViz
+    //   visual_tools.deleteAllMarkers();
+    //   visual_tools.publishText(text_pose, "Joint Space Goal", rvt::WHITE, rvt::XLARGE);
+    //   visual_tools.publishPath(waypoints_down_to_storage, rvt::LIME_GREEN, rvt::SMALL);
+    //   for (std::size_t i = 0; i < waypoints_down_to_storage.size(); ++i)
+    //     visual_tools.publishAxisLabeled(waypoints_down_to_storage[i], "pt" + std::to_string(i), rvt::SMALL);
+    //   visual_tools.trigger();
 
-      #ifdef DEBUG
-        visual_tools.prompt("Press 'next' to go down");
-      #endif
+    //   #ifdef DEBUG
+    //     visual_tools.prompt("Press 'next' to go down");
+    //   #endif
 
-      move_group.execute(cartesian_plan);
-    }
+    //   move_group.execute(cartesian_plan);
+    // }
 
     ROS_INFO("//  ====================== turn off the magnet to detach the brick  ====================== //");
     {
       magnet_on_msg.data = 0;
       magnet_state_pub.publish(magnet_on_msg); // MAGNET OFF
       ROS_INFO("_placeInContainerServiceCallback: MAGNET_OFF");
-      ros::Duration(3).sleep();
+      ros::Duration(2).sleep();
       
       detachBrick();
       deleteObject();
@@ -1008,6 +1008,7 @@ public:
         move_group.move();                      // BLOCKING FUNCTION
       }
 
+      #ifndef DEBUG_NOSLIDE
       ROS_INFO("//  ====================== UR5 base side: back to Default position  ====================== //");
       {
         bool success = slide_ur5_base_home_position();
@@ -1017,6 +1018,7 @@ public:
           return true;
         }
       }
+      #endif
       
 
       moveToDefault(RIGHT);
@@ -1024,7 +1026,7 @@ public:
       moveToDefault_finished_flag_msg.data = true;
       moveToDefault_finished_flag_pub.publish(moveToDefault_finished_flag_msg); // let the planner know that the arm is up
     }
-
+    res.success = true;
     return true;
 
   }
@@ -1504,6 +1506,41 @@ public:
     // #endif
 
     move_group.move();                      // BLOCKING FUNCTION
+
+    ROS_INFO("=============== Adjust Default Position  ===============");
+    {
+
+      // Need the EE to be parallel to the ground
+      current_state = move_group.getCurrentState();
+      ros::Duration(0.5).sleep();
+      current_state = move_group.getCurrentState();
+      // Next get the current set of joint values for the group.
+      std::vector<double> joint_group_positions;
+      current_state->copyJointGroupPositions(joint_model_group, joint_group_positions);
+      joint_group_positions[0] = PI;  // Radian
+      joint_group_positions[1] = -PI/2;
+      joint_group_positions[2] = PI/180*60;
+      joint_group_positions[3] = 2 * PI - PI/180 * 60;
+      joint_group_positions[4] = -PI/2;
+      joint_group_positions[5] = 0;
+      move_group.setJointValueTarget(joint_group_positions);
+      move_group.setMaxVelocityScalingFactor(0.01);
+      move_group.setMaxAccelerationScalingFactor(0.01);
+      move_group.setPlanningTime(PLANNING_TIMEOUT);
+      move_group.setGoalJointTolerance(0.00000001);
+
+
+      bool success{move_group.plan(my_plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS};
+      ROS_INFO_NAMED("tutorial", "Make EE parallel to the ground: %s", success ? "SUCCEEDED" : "FAILED");
+
+      // #ifdef DEBUG
+        // visual_tools.prompt("Press 'next' to make EE parallel to the ground");
+      // #endif
+
+      move_group.move();                      // BLOCKING FUNCTION
+
+    }
+
     moveToDefault_finished_flag_msg.data = true;
     ROS_INFO("publish moveToDefault_finished_flag_msg");
     moveToDefault_finished_flag_pub.publish(moveToDefault_finished_flag_msg); // let the planner know that the arm is up
@@ -1613,11 +1650,10 @@ public:
 
     if (container_direction == LEFT)
     {
-      // ur5_base_slide_srv.request.value = -1600000;
       ur5_base_slide_srv.request.value = DYNAMIXEL_ID7_HOME_POSITION - DYNAMIXEL_ID7_ORANGE_LEFT_CONTAINER_DIFF;
     }else
     {
-      // ur5_base_slide_srv.request.value = -2350000;
+      
       ur5_base_slide_srv.request.value = DYNAMIXEL_ID7_HOME_POSITION - DYNAMIXEL_ID7_ORANGE_RIGHT_CONTAINER_DIFF;
     }
 
@@ -1639,6 +1675,53 @@ public:
       }
     }else{
       std::cout << "slide_ur5_base_orange_backward: ur5_base_slide_sc: Failed to call service" << std::endl;
+    }
+  }
+
+  bool slide_ur5_base_green_backward(bool container_direction, int column)
+  {
+    ur5_base_slide_srv.request.command = "";
+    ur5_base_slide_srv.request.id = 7;
+    ur5_base_slide_srv.request.addr_name = "Goal_Position";
+
+    if (container_direction == LEFT)
+    {
+      if(column == 0)
+      {
+        ur5_base_slide_srv.request.value = DYNAMIXEL_ID7_HOME_POSITION - DYNAMIXEL_ID7_GREEN_RIGHT_1_CONTAINER_DIFF;
+      }else
+      {
+        ur5_base_slide_srv.request.value = DYNAMIXEL_ID7_HOME_POSITION - DYNAMIXEL_ID7_GREEN_RIGHT_2_CONTAINER_DIFF;
+      }
+    }else
+    {
+      if(column == 0)
+      {
+        ur5_base_slide_srv.request.value = DYNAMIXEL_ID7_HOME_POSITION - DYNAMIXEL_ID7_ORANGE_LEFT_CONTAINER_DIFF;
+      }else
+      {
+        ur5_base_slide_srv.request.value = DYNAMIXEL_ID7_HOME_POSITION - DYNAMIXEL_ID7_ORANGE_LEFT_CONTAINER_DIFF;
+      }
+    }
+
+    // call the service
+    if (ur5_base_slide_sc.call(ur5_base_slide_srv))
+    {
+      
+      if(ur5_base_slide_srv.response.comm_result == true)
+      {
+          ROS_INFO("slide_ur5_base_green_backward");
+          // wait until the dynamixel reach the desired position
+          slide_ur5_base_wait_for_finish(ur5_base_slide_srv.request.value);
+          return true;
+      }else
+      {
+        // fail to request service
+        std::cout << "slide_ur5_base_green_backward: ur5_base_slide_sc: Failed to call service" << std::endl;
+        return false;
+      }
+    }else{
+      std::cout << "slide_ur5_base_green_backward: ur5_base_slide_sc: Failed to call service" << std::endl;
     }
   }
 
@@ -2142,7 +2225,7 @@ public:
     }
   }
 
-
+  
   void moveToStorageSide_DEBUG(uint box_count)
   {
     std::vector<double> joint_group_positions;
@@ -2250,12 +2333,12 @@ public:
       move_group.execute(cartesian_plan);
     }
 
-    ROS_INFO("//  ====================== Slide the UR5 base ====================== //");
-    {
-      // DYNAMIXEL service
-      bool success = slide_ur5_base_orange_backward(LEFT);
+    // ROS_INFO("//  ====================== Slide the UR5 base ====================== //");
+    // {
+    //   // DYNAMIXEL service
+    //   bool success = slide_ur5_base_orange_backward(LEFT);
       
-    }
+    // }
 
     ROS_INFO("//  ====================== Go down the container ====================== //");
     {
@@ -2323,11 +2406,11 @@ public:
       move_group.execute(cartesian_plan);
     }
 
-    ROS_INFO("//  ====================== UR5 base side: back to Default position  ====================== //");
-    {
-      // DYNAMIXEL service
-      bool success = slide_ur5_base_home_position();
-    }
+    // ROS_INFO("//  ====================== UR5 base side: back to Default position  ====================== //");
+    // {
+    //   // DYNAMIXEL service
+    //   bool success = slide_ur5_base_home_position();
+    // }
 
     ROS_INFO("//  ====================== move back to the default position  ====================== //");
     {

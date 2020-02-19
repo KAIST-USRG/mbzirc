@@ -28,6 +28,7 @@ int status_MAG_LEFT = -1; // [-1] Neutral, [0] OFF, [1] ON
 int status_MAG_RIGHT = -1; // [-1] Neutral, [0] OFF, [1] ON
 int time_MAG = 0;
 
+// Magnet topic flag for mission 2
 int cur_FlagA = -1;
 int prev_FlagA = -1;
 

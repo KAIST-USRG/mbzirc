@@ -1,4 +1,5 @@
 int64 order_of_this_brick       # indicate the height of where to put the brick
 bool brick_container_side       # LEFT = 0, RIGHT = 1
+int64 brick_color_code		# COLOR_CODE : orange=1, blue=2, green=3, red = 4
 ---
 bool success

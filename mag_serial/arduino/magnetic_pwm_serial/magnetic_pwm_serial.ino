@@ -16,7 +16,7 @@ Servo MAG_RIGHT;
 
 
 void setup() {
-  Serial.begin(921600); // USB, ROS Interface
+  Serial.begin(115200); // USB, ROS Interface
 #ifdef DEBUG_MODE
   Serial.println("Setup Start");
   Serial.println("");
@@ -101,6 +101,9 @@ void loop() {
     time_MAG = millis();
     prev_FlagA = cur_FlagA;
   }
+
+  // ----- for Mission 2 ----- //
+  // (Magnet on/off both of them) (Off:0 / On:1) //
   if(cur_FlagA == 0) { // Magnet Off
     if(cur_time - time_MAG < 50) {
       MAG_LEFT.write(5);
@@ -122,6 +125,47 @@ void loop() {
       MAG_LEFT.write(90);
       MAG_RIGHT.write(90);
       status_MAG_LEFT = 1;
+      status_MAG_RIGHT = 1;
+    }
+
+  // ----- for Mission 3 ----- //
+  // (Magnet on/off each of them)
+  // (Left off:2, Left on: 3 / Right off: 4, Right on: 5) //
+
+  else if(cur_FlagA == 2) { // Right Magnet Off
+    if(cur_time - time_MAG < 50) {
+      MAG_LEFT.write(5);
+    }
+    else if(cur_time - time_MAG > 200) {
+      MAG_LEFT.write(90);
+      status_MAG_LEFT = 0;
+    }
+  }
+  else if(cur_FlagA == 3) { // Right Magnet On
+    if(cur_time - time_MAG < 50) {
+      MAG_LEFT.write(175);
+    }
+    else if(cur_time - time_MAG > 200) {
+      MAG_LEFT.write(90);
+      status_MAG_LEFT = 1;
+    }
+  }
+
+  else if(cur_FlagA == 4) { // Left Magnet Off
+    if(cur_time - time_MAG < 50) {
+      MAG_RIGHT.write(5);
+    }
+    else if(cur_time - time_MAG > 200) {
+      MAG_RIGHT.write(90);
+      status_MAG_RIGHT = 0;
+    }
+  }
+  else if(cur_FlagA == 5) { // Left Magnet On
+    if(cur_time - time_MAG < 50) {
+      MAG_RIGHT.write(175);
+    }
+    else if(cur_time - time_MAG > 200) {
+      MAG_RIGHT.write(90);
       status_MAG_RIGHT = 1;
     }
   }

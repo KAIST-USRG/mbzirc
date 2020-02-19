@@ -26,6 +26,8 @@ int main(int argc, char** argv)
 	printf("Initiate: publish rostopic </switch_state>\n");   // for debugging
 
 // Subscribe Topic
+// Mission 2 : (0 : Magnet off / 1 : Magnet On)
+// Mission 3 : (2 : Left Magnet off / 3 : Left Magnet on / 4 : Right Magnet off / 5 : Right Magnet on)
 	ROS_TX_CMD_Data_sub = nh.subscribe("/magnet_on", 1, ROS_CMD_MAG_Data_Callback);
 	printf("Initiate: Subscribe rostopic </magnet_on>\n");   // for debugging
 
@@ -95,4 +97,3 @@ void ROS_CMD_MAG_Data_Callback(const std_msgs::Int32& msg_input)
 	ROS_INFO("Get the rostopic from /magnet_on");
 	StrROS_TX_CMD_Data.FlagA = (uint8_t)msg_input.data;
 }
-

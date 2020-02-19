@@ -33,7 +33,7 @@ class GotoBrick:
         self.destination_yaw             = 0.0
         self.result_cmd_vel              = Twist()
 
-        self.twist_pub = rospy.Publisher('/visual_cmd_vel', Twist, queue_size=10)
+        self.twist_pub = rospy.Publisher('/visual/cmd_vel', Twist, queue_size=10)
         rospy.Subscriber('/goal_position', PoseStamped, self.pose_callback, queue_size=10)
 
         # Subscribe
@@ -129,3 +129,4 @@ if __name__ == "__main__":
     gotoBrick = GotoBrick()
     if not gotoBrick.service_control:
         gotoBrick.run()
+

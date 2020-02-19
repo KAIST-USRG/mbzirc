@@ -12,7 +12,7 @@ int OpenSerial(char *device_name)
 
     if(fd < 0)
     {
-        printf("Serial Port Open Fail.: errno - %d\n", errno);
+        printf("Serial Port Open Fail.\n");
         return -1;
     }
 
